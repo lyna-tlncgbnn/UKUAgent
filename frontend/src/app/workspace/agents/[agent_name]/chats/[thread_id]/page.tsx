@@ -81,6 +81,11 @@ export default function AgentChatPage() {
     await thread.stop();
   }, [thread]);
 
+  const todos = thread.values.todos ?? [];
+  const hasTodos = todos.length > 0;
+  const hasIncompleteTodos = todos.some((todo) => todo.status !== "completed");
+  const hideTodoList = !hasTodos || (!thread.isLoading && !hasIncompleteTodos);
+
   return (
     <ThreadContext.Provider value={{ thread }}>
       <ChatBox threadId={threadId}>
@@ -145,10 +150,8 @@ export default function AgentChatPage() {
                   <div className="absolute right-0 bottom-0 left-0">
                     <TodoList
                       className="bg-background/5"
-                      todos={thread.values.todos ?? []}
-                      hidden={
-                        !thread.values.todos || thread.values.todos.length === 0
-                      }
+                      todos={todos}
+                      hidden={hideTodoList}
                     />
                   </div>
                 </div>

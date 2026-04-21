@@ -212,13 +212,7 @@ export const enUS: Translations = {
 
   // Workspace
   workspace: {
-    officialWebsite: "DeerFlow's official website",
     githubTooltip: "DeerFlow on Github",
-    settingsAndMore: "Settings and more",
-    visitGithub: "DeerFlow on GitHub",
-    reportIssue: "Report a issue",
-    contactUs: "Contact us",
-    about: "About DeerFlow",
   },
 
   // Conversation
@@ -308,7 +302,6 @@ export const enUS: Translations = {
       tools: "Tools",
       skills: "Skills",
       notification: "Notification",
-      about: "About",
     },
     memory: {
       title: "Memory",

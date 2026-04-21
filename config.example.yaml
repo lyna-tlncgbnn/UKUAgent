@@ -649,6 +649,36 @@ checkpointer:
 #           context:
 #             thinking_enabled: true
 #             subagent_enabled: true
+#
+#   wecom:
+#     enabled: false
+#     # Preferred mode: long connection (Bot ID + Secret, no public callback URL needed)
+#     mode: long_connection
+#     bot_id: $WECOM_BOT_ID
+#     bot_secret: $WECOM_BOT_SECRET
+#     # Optional: send a welcome message when the bot is added to a chat
+#     # welcome_text: "Hi, I am DeerFlow."
+#
+#     # Compatibility mode: callback URL + classic app APIs
+#     # mode: callback
+#     # corp_id: $WECOM_CORP_ID
+#     # agent_id: $WECOM_AGENT_ID
+#     # agent_secret: $WECOM_AGENT_SECRET
+#     # token: $WECOM_CALLBACK_TOKEN
+#     # encoding_aes_key: $WECOM_ENCODING_AES_KEY
+#     # Callback URL example:
+#     #   https://<your-public-domain>/api/channels/wecom/callback
+#
+#     # Optional outbound-only group robot mirror for final responses
+#     robot:
+#       enabled: false
+#       webhook: $WECOM_ROBOT_WEBHOOK
+#       secret: $WECOM_ROBOT_SECRET
+#       sync_push_on_final: false
+#     session:
+#       assistant_id: lead_agent
+#       context:
+#         thinking_enabled: true
 
 # ============================================================================
 # Guardrails Configuration

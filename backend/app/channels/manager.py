@@ -10,7 +10,11 @@ import time
 from collections.abc import Mapping
 from typing import Any
 
-from langgraph_sdk.errors import ConflictError
+try:
+    from langgraph_sdk.errors import ConflictError
+except Exception:  # pragma: no cover - test environments may not install langgraph_sdk
+    class ConflictError(Exception):
+        """Fallback ConflictError when langgraph_sdk is unavailable."""
 
 from app.channels.message_bus import InboundMessage, InboundMessageType, MessageBus, OutboundMessage, ResolvedAttachment
 from app.channels.store import ChannelStore
@@ -35,6 +39,7 @@ CHANNEL_CAPABILITIES = {
     "feishu": {"supports_streaming": True},
     "slack": {"supports_streaming": False},
     "telegram": {"supports_streaming": False},
+    "wecom": {"supports_streaming": False},
 }
 
 
@@ -48,6 +53,16 @@ def _is_thread_busy_error(exc: BaseException | None) -> bool:
     if isinstance(exc, ConflictError):
         return True
     return "already running a task" in str(exc)
+
+
+def _is_missing_thread_error(exc: BaseException | None) -> bool:
+    if exc is None:
+        return False
+    message = str(exc)
+    return (
+        "404 Not Found" in message
+        and ("Thread or assistant not found" in message or "/threads/" in message)
+    )
 
 
 def _as_dict(value: Any) -> dict[str, Any]:
@@ -525,6 +540,7 @@ class ChannelManager:
         # topic_id may be None (e.g. Telegram private chats) — the store
         # handles this by using the "channel:chat_id" key without a topic suffix.
         thread_id = self.store.get_thread_id(msg.channel_name, msg.chat_id, topic_id=msg.topic_id)
+        had_existing_thread = thread_id is not None
         if thread_id:
             logger.info("[Manager] reusing thread: thread_id=%s for topic_id=%s", thread_id, msg.topic_id)
 
@@ -547,13 +563,38 @@ class ChannelManager:
             return
 
         logger.info("[Manager] invoking runs.wait(thread_id=%s, text=%r)", thread_id, msg.text[:100])
-        result = await client.runs.wait(
-            thread_id,
-            assistant_id,
-            input={"messages": [{"role": "human", "content": msg.text}]},
-            config=run_config,
-            context=run_context,
-        )
+        try:
+            result = await client.runs.wait(
+                thread_id,
+                assistant_id,
+                input={"messages": [{"role": "human", "content": msg.text}]},
+                config=run_config,
+                context=run_context,
+            )
+        except Exception as exc:
+            if not (had_existing_thread and _is_missing_thread_error(exc)):
+                raise
+
+            logger.warning(
+                "[Manager] stale thread mapping detected for channel=%s chat_id=%s topic_id=%s thread_id=%s; recreating thread",
+                msg.channel_name,
+                msg.chat_id,
+                msg.topic_id,
+                thread_id,
+            )
+            self.store.remove(msg.channel_name, msg.chat_id, topic_id=msg.topic_id)
+            thread_id = await self._create_thread(client, msg)
+            assistant_id, run_config, run_context = self._resolve_run_params(msg, thread_id)
+            if extra_context:
+                run_context.update(extra_context)
+            logger.info("[Manager] retrying runs.wait with fresh thread_id=%s", thread_id)
+            result = await client.runs.wait(
+                thread_id,
+                assistant_id,
+                input={"messages": [{"role": "human", "content": msg.text}]},
+                config=run_config,
+                context=run_context,
+            )
 
         response_text = _extract_response_text(result)
         artifacts = _extract_artifacts(result)

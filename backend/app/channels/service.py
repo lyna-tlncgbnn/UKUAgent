@@ -17,6 +17,7 @@ _CHANNEL_REGISTRY: dict[str, str] = {
     "feishu": "app.channels.feishu:FeishuChannel",
     "slack": "app.channels.slack:SlackChannel",
     "telegram": "app.channels.telegram:TelegramChannel",
+    "wecom": "app.channels.wecom:WecomChannel",
 }
 
 _CHANNELS_LANGGRAPH_URL_ENV = "DEER_FLOW_CHANNELS_LANGGRAPH_URL"
@@ -162,6 +163,10 @@ class ChannelService:
             "service_running": self._running,
             "channels": channels_status,
         }
+
+    def get_channel(self, name: str) -> Any | None:
+        """Return a started channel instance by name."""
+        return self._channels.get(name)
 
 
 # -- singleton access -------------------------------------------------------
