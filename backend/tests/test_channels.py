@@ -7,7 +7,7 @@ import json
 import tempfile
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -2127,3 +2127,109 @@ class TestSlackMarkdownConversion:
         result = _slack_md_converter.convert("# Title")
         assert "*Title*" in result
         assert "#" not in result
+
+
+class TestWecomMultimodalManager:
+    def test_handle_chat_materializes_images_into_multimodal_input(self):
+        from app.channels.manager import ChannelManager
+
+        async def go():
+            base_dir = Path(tempfile.mkdtemp(dir=Path.cwd()))
+            bus = MessageBus()
+            store = ChannelStore(path=base_dir / "store.json")
+            manager = ChannelManager(bus=bus, store=store)
+
+            mock_client = _make_mock_langgraph_client(thread_id="thread-img-1")
+            manager._client = mock_client
+
+            uploads_dir = base_dir / "uploads"
+            uploads_dir.mkdir()
+            mock_paths = MagicMock()
+            mock_paths.sandbox_uploads_dir.return_value = uploads_dir
+
+            mock_provider = MagicMock()
+            mock_provider.acquire.return_value = "local"
+            mock_provider.get.return_value = MagicMock()
+
+            inbound = InboundMessage(
+                channel_name="test",
+                chat_id="chat1",
+                user_id="user1",
+                text="看看这张图",
+                files=[
+                    {
+                        "filename": "photo.png",
+                        "mime_type": "image/png",
+                        "buffer": b"\x89PNG",
+                        "is_image": True,
+                    }
+                ],
+            )
+
+            with patch("deerflow.uploads.manager.ensure_uploads_dir", return_value=uploads_dir), patch(
+                "deerflow.config.paths.get_paths", return_value=mock_paths
+            ), patch("deerflow.sandbox.sandbox_provider.get_sandbox_provider", return_value=mock_provider):
+                await manager._handle_chat(inbound)
+
+            call_args = mock_client.runs.wait.call_args
+            content = call_args.kwargs["input"]["messages"][0]["content"]
+            assert isinstance(content, list)
+            assert content[0] == {"type": "text", "text": "看看这张图"}
+            assert content[1]["type"] == "image_url"
+            assert content[1]["image_url"]["url"].startswith("http://localhost:8001/api/threads/thread-img-1/artifacts")
+            assert inbound.files[0]["materialized_thread_id"] == "thread-img-1"
+
+        _run(go())
+
+    def test_wecom_messages_use_streaming_path(self, monkeypatch):
+        from app.channels.manager import ChannelManager
+
+        monkeypatch.setattr("app.channels.manager.STREAM_UPDATE_MIN_INTERVAL_SECONDS", 0.0)
+
+        async def go():
+            base_dir = Path(tempfile.mkdtemp(dir=Path.cwd()))
+            bus = MessageBus()
+            store = ChannelStore(path=base_dir / "store.json")
+            manager = ChannelManager(bus=bus, store=store)
+
+            outbound_received = []
+
+            async def capture_outbound(msg):
+                outbound_received.append(msg)
+
+            bus.subscribe_outbound(capture_outbound)
+
+            stream_events = [
+                _make_stream_part(
+                    "values",
+                    {
+                        "messages": [
+                            {"type": "human", "content": "hello"},
+                            {"type": "ai", "content": "stream done"},
+                        ],
+                        "artifacts": [],
+                    },
+                ),
+            ]
+
+            mock_client = _make_mock_langgraph_client(thread_id="thread-stream-1")
+            mock_client.runs.stream = MagicMock(return_value=_make_async_iterator(stream_events))
+            manager._client = mock_client
+
+            await manager.start()
+            await bus.publish_inbound(
+                InboundMessage(
+                    channel_name="wecom",
+                    chat_id="user:1001",
+                    user_id="1001",
+                    text="hello",
+                    thread_ts="req-1",
+                )
+            )
+            await _wait_for(lambda: any(msg.is_final for msg in outbound_received))
+            await manager.stop()
+
+            mock_client.runs.stream.assert_called_once()
+            mock_client.runs.wait.assert_not_called()
+
+        _run(go())

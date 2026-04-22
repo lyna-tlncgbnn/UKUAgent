@@ -5,7 +5,9 @@ from __future__ import annotations
 import asyncio
 import logging
 import mimetypes
+import os
 import re
+import stat
 import time
 from collections.abc import Mapping
 from typing import Any
@@ -39,7 +41,7 @@ CHANNEL_CAPABILITIES = {
     "feishu": {"supports_streaming": True},
     "slack": {"supports_streaming": False},
     "telegram": {"supports_streaming": False},
-    "wecom": {"supports_streaming": False},
+    "wecom": {"supports_streaming": True},
 }
 
 
@@ -75,6 +77,158 @@ def _merge_dicts(*layers: Any) -> dict[str, Any]:
         if isinstance(layer, Mapping):
             merged.update(layer)
     return merged
+
+
+def _to_absolute_url(base_url: str, value: str) -> str:
+    if value.startswith(("http://", "https://")):
+        return value
+    return f"{base_url.rstrip('/')}/{value.lstrip('/')}"
+
+
+def _looks_like_image_file(file_info: Mapping[str, Any]) -> bool:
+    mime_type = file_info.get("mime_type")
+    if isinstance(mime_type, str) and mime_type.startswith("image/"):
+        return True
+
+    filename = file_info.get("filename")
+    if isinstance(filename, str):
+        guessed, _ = mimetypes.guess_type(filename)
+        if guessed and guessed.startswith("image/"):
+            return True
+
+    return bool(file_info.get("is_image"))
+
+
+def _build_human_message_content(msg: InboundMessage, gateway_url: str) -> str | list[dict[str, Any]]:
+    if not msg.files:
+        return msg.text
+
+    content_blocks: list[dict[str, Any]] = []
+    if msg.text:
+        content_blocks.append({"type": "text", "text": msg.text})
+
+    for file_info in msg.files:
+        if not isinstance(file_info, Mapping) or not _looks_like_image_file(file_info):
+            continue
+
+        image_url = file_info.get("image_url") or file_info.get("artifact_url") or file_info.get("url")
+        if not isinstance(image_url, str) or not image_url.strip():
+            continue
+
+        content_blocks.append(
+            {
+                "type": "image_url",
+                "image_url": {"url": _to_absolute_url(gateway_url, image_url.strip())},
+            }
+        )
+
+    if content_blocks:
+        return content_blocks
+    return msg.text
+
+
+def _append_input_notes(text: str, notes: list[str]) -> str:
+    if not notes:
+        return text
+    joined = "\n".join(f"- {note}" for note in notes)
+    if text:
+        return f"{text}\n\n附加说明：\n{joined}"
+    return f"附加说明：\n{joined}"
+
+
+def _make_file_sandbox_writable(file_path: os.PathLike[str] | str) -> None:
+    file_stat = os.lstat(file_path)
+    if stat.S_ISLNK(file_stat.st_mode):
+        return
+
+    writable_mode = stat.S_IMODE(file_stat.st_mode) | stat.S_IWUSR | stat.S_IWGRP | stat.S_IWOTH
+    chmod_kwargs = {"follow_symlinks": False} if os.chmod in os.supports_follow_symlinks else {}
+    os.chmod(file_path, writable_mode, **chmod_kwargs)
+
+
+async def _materialize_inbound_files(thread_id: str, files: list[dict[str, Any]]) -> tuple[list[dict[str, Any]], list[str]]:
+    from deerflow.config.paths import get_paths
+    from deerflow.sandbox.sandbox_provider import get_sandbox_provider
+    from deerflow.uploads.manager import (
+        claim_unique_filename,
+        ensure_uploads_dir,
+        normalize_filename,
+        upload_artifact_url,
+        upload_virtual_path,
+    )
+
+    if not files:
+        return [], []
+
+    uploads_dir = ensure_uploads_dir(thread_id)
+    sandbox_uploads = get_paths().sandbox_uploads_dir(thread_id)
+    sandbox_provider = get_sandbox_provider()
+    sandbox_id = sandbox_provider.acquire(thread_id)
+    sandbox = sandbox_provider.get(sandbox_id)
+
+    seen_names: set[str] = set()
+
+    materialized: list[dict[str, Any]] = []
+    notes: list[str] = []
+
+    for index, file_info in enumerate(files):
+        if not isinstance(file_info, Mapping):
+            notes.append(f"第 {index + 1} 个附件格式无效，已跳过。")
+            continue
+
+        existing_artifact = file_info.get("artifact_url")
+        existing_thread = file_info.get("materialized_thread_id")
+        if isinstance(existing_artifact, str) and existing_artifact and existing_thread == thread_id:
+            materialized.append(dict(file_info))
+            continue
+
+        buffer = file_info.get("buffer")
+        if not isinstance(buffer, (bytes, bytearray)):
+            error_text = file_info.get("error")
+            if isinstance(error_text, str) and error_text.strip():
+                notes.append(error_text.strip())
+            continue
+
+        candidate_name = str(file_info.get("filename") or f"inbound-{index + 1}")
+        try:
+            safe_name = normalize_filename(candidate_name)
+        except ValueError:
+            ext = ""
+            mime_type = file_info.get("mime_type")
+            if isinstance(mime_type, str) and mime_type:
+                ext = mimetypes.guess_extension(mime_type.split(";")[0].strip()) or ""
+            safe_name = f"inbound-{index + 1}{ext}"
+
+        safe_name = claim_unique_filename(safe_name, seen_names)
+        file_path = uploads_dir / safe_name
+        file_bytes = bytes(buffer)
+        file_path.write_bytes(file_bytes)
+
+        virtual_path = upload_virtual_path(safe_name)
+        if sandbox_id != "local":
+            _make_file_sandbox_writable(file_path)
+            sandbox.update_file(virtual_path, file_bytes)
+
+        mime_type = file_info.get("mime_type")
+        if not isinstance(mime_type, str) or not mime_type:
+            mime_type = mimetypes.guess_type(safe_name)[0] or "application/octet-stream"
+
+        merged = dict(file_info)
+        merged.update(
+            {
+                "filename": safe_name,
+                "size": len(file_bytes),
+                "path": str(sandbox_uploads / safe_name),
+                "virtual_path": virtual_path,
+                "artifact_url": upload_artifact_url(thread_id, safe_name),
+                "mime_type": mime_type,
+                "is_image": _looks_like_image_file({"filename": safe_name, "mime_type": mime_type, "is_image": file_info.get("is_image")}),
+                "materialized_thread_id": thread_id,
+            }
+        )
+        materialized.append(merged)
+
+    return materialized, notes
 
 
 def _normalize_custom_agent_name(raw_value: str) -> str:
@@ -548,18 +702,55 @@ class ChannelManager:
         if thread_id is None:
             thread_id = await self._create_thread(client, msg)
 
+        materialized_files, file_notes = await _materialize_inbound_files(thread_id, msg.files)
+        if materialized_files:
+            msg.files = materialized_files
+        if file_notes:
+            msg.text = _append_input_notes(msg.text, file_notes)
+        human_content = _build_human_message_content(msg, self._gateway_url)
+
         assistant_id, run_config, run_context = self._resolve_run_params(msg, thread_id)
         if extra_context:
             run_context.update(extra_context)
         if self._channel_supports_streaming(msg.channel_name):
-            await self._handle_streaming_chat(
-                client,
-                msg,
-                thread_id,
-                assistant_id,
-                run_config,
-                run_context,
-            )
+            try:
+                await self._handle_streaming_chat(
+                    client,
+                    msg,
+                    thread_id,
+                    assistant_id,
+                    run_config,
+                    run_context,
+                )
+            except Exception as exc:
+                if not (had_existing_thread and _is_missing_thread_error(exc)):
+                    raise
+
+                logger.warning(
+                    "[Manager] stale thread mapping detected for streaming channel=%s chat_id=%s topic_id=%s thread_id=%s; recreating thread",
+                    msg.channel_name,
+                    msg.chat_id,
+                    msg.topic_id,
+                    thread_id,
+                )
+                self.store.remove(msg.channel_name, msg.chat_id, topic_id=msg.topic_id)
+                thread_id = await self._create_thread(client, msg)
+                materialized_files, file_notes = await _materialize_inbound_files(thread_id, msg.files)
+                if materialized_files:
+                    msg.files = materialized_files
+                if file_notes:
+                    msg.text = _append_input_notes(msg.text, file_notes)
+                assistant_id, run_config, run_context = self._resolve_run_params(msg, thread_id)
+                if extra_context:
+                    run_context.update(extra_context)
+                await self._handle_streaming_chat(
+                    client,
+                    msg,
+                    thread_id,
+                    assistant_id,
+                    run_config,
+                    run_context,
+                )
             return
 
         logger.info("[Manager] invoking runs.wait(thread_id=%s, text=%r)", thread_id, msg.text[:100])
@@ -567,7 +758,7 @@ class ChannelManager:
             result = await client.runs.wait(
                 thread_id,
                 assistant_id,
-                input={"messages": [{"role": "human", "content": msg.text}]},
+                input={"messages": [{"role": "human", "content": human_content}]},
                 config=run_config,
                 context=run_context,
             )
@@ -584,6 +775,12 @@ class ChannelManager:
             )
             self.store.remove(msg.channel_name, msg.chat_id, topic_id=msg.topic_id)
             thread_id = await self._create_thread(client, msg)
+            materialized_files, file_notes = await _materialize_inbound_files(thread_id, msg.files)
+            if materialized_files:
+                msg.files = materialized_files
+            if file_notes:
+                msg.text = _append_input_notes(msg.text, file_notes)
+            human_content = _build_human_message_content(msg, self._gateway_url)
             assistant_id, run_config, run_context = self._resolve_run_params(msg, thread_id)
             if extra_context:
                 run_context.update(extra_context)
@@ -591,7 +788,7 @@ class ChannelManager:
             result = await client.runs.wait(
                 thread_id,
                 assistant_id,
-                input={"messages": [{"role": "human", "content": msg.text}]},
+                input={"messages": [{"role": "human", "content": human_content}]},
                 config=run_config,
                 context=run_context,
             )
@@ -636,6 +833,7 @@ class ChannelManager:
         run_context: dict[str, Any],
     ) -> None:
         logger.info("[Manager] invoking runs.stream(thread_id=%s, text=%r)", thread_id, msg.text[:100])
+        human_content = _build_human_message_content(msg, self._gateway_url)
 
         last_values: dict[str, Any] | list | None = None
         streamed_buffers: dict[str, str] = {}
@@ -649,7 +847,7 @@ class ChannelManager:
             async for chunk in client.runs.stream(
                 thread_id,
                 assistant_id,
-                input={"messages": [{"role": "human", "content": msg.text}]},
+                input={"messages": [{"role": "human", "content": human_content}]},
                 config=run_config,
                 context=run_context,
                 stream_mode=["messages-tuple", "values"],
@@ -689,6 +887,8 @@ class ChannelManager:
                 last_publish_at = now
         except Exception as exc:
             stream_error = exc
+            if _is_missing_thread_error(exc):
+                raise
             if _is_thread_busy_error(exc):
                 logger.warning("[Manager] thread busy (concurrent run rejected): thread_id=%s", thread_id)
             else:

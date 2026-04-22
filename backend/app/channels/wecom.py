@@ -12,9 +12,11 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import json
 import hashlib
 import hmac
 import logging
+import mimetypes
 import secrets
 import struct
 import time
@@ -266,6 +268,7 @@ class WecomChannel(Channel):
         self._client = None
         self._crypto = None
         self._reply_frames: dict[str, Mapping[str, Any]] = {}
+        self._stream_ids: dict[str, str] = {}
 
         self._bot_id = str(config.get("bot_id", "")).strip()
         self._bot_secret = str(config.get("bot_secret", config.get("secret", ""))).strip()
@@ -292,6 +295,7 @@ class WecomChannel(Channel):
                 secret=str(robot_config.get("secret", "")).strip() or None,
                 timeout=float(robot_config.get("timeout", 10.0)),
             )
+        self._download_timeout = float(config.get("download_timeout", timeout))
 
     async def start(self) -> None:
         if self._running:
@@ -338,6 +342,8 @@ class WecomChannel(Channel):
         ws_client = WSClient(bot_id=self._bot_id, secret=self._bot_secret)
         ws_client.on("authenticated", self._on_authenticated)
         ws_client.on("message.text", self._on_ws_text)
+        ws_client.on("message.image", self._on_ws_image)
+        ws_client.on("message.mixed", self._on_ws_mixed)
         ws_client.on("event.enter_chat", self._on_enter_chat)
         self._ws_client = ws_client
         await ws_client.connect()
@@ -350,7 +356,7 @@ class WecomChannel(Channel):
             for attempt in range(_max_retries):
                 try:
                     if self._mode == "long_connection":
-                        await self._send_ws_text(msg.chat_id, text, thread_ts=msg.thread_ts)
+                        await self._send_ws_text(msg.chat_id, text, thread_ts=msg.thread_ts, is_final=msg.is_final)
                     else:
                         target_kind, target_id = self._decode_target(msg.chat_id)
                         await self._send_app_text(target_kind=target_kind, target_id=target_id, text=text)
@@ -418,12 +424,20 @@ class WecomChannel(Channel):
             await self.bus.publish_inbound(inbound)
         return inbound
 
-    async def _send_ws_text(self, chat_id: str, text: str, *, thread_ts: str | None = None) -> None:
+    async def _send_ws_text(self, chat_id: str, text: str, *, thread_ts: str | None = None, is_final: bool = True) -> None:
         if self._ws_client is None:
             raise RuntimeError("WeCom long connection is not configured")
         if thread_ts and thread_ts in self._reply_frames:
-            stream_id = self._generate_req_id("stream") if hasattr(self, "_generate_req_id") else f"stream-{int(time.time() * 1000)}"
-            await self._ws_client.reply_stream(self._reply_frames[thread_ts], stream_id, text, finish=True)
+            stream_id = self._stream_ids.get(thread_ts)
+            if not stream_id:
+                stream_id = self._generate_req_id("stream") if hasattr(self, "_generate_req_id") else f"stream-{int(time.time() * 1000)}"
+                self._stream_ids[thread_ts] = stream_id
+            await self._ws_client.reply_stream(self._reply_frames[thread_ts], stream_id, text, finish=is_final)
+            if is_final:
+                self._stream_ids.pop(thread_ts, None)
+                self._reply_frames.pop(thread_ts, None)
+            return
+        if not is_final:
             return
         await self._ws_client.send_message(self._strip_target_prefix(chat_id), _markdown_body(text))
 
@@ -462,24 +476,47 @@ class WecomChannel(Channel):
             logger.warning("[WeCom] failed to send welcome message", exc_info=True)
 
     async def _on_ws_text(self, frame: Mapping[str, Any]) -> None:
-        inbound = self._parse_ws_frame(frame)
+        inbound = await self._parse_ws_frame(frame, forced_msgtype="text")
         if inbound is not None:
             if inbound.thread_ts:
                 self._reply_frames[inbound.thread_ts] = frame
             await self.bus.publish_inbound(inbound)
+        else:
+            logger.info("[WeCom] skipped inbound frame: forced=text frame_keys=%s", sorted(frame.keys()))
 
-    def _parse_ws_frame(self, frame: Mapping[str, Any]) -> InboundMessage | None:
-        body = frame.get("body")
-        if not isinstance(body, Mapping):
-            return None
+    async def _on_ws_image(self, frame: Mapping[str, Any]) -> None:
+        inbound = await self._parse_ws_frame(frame, forced_msgtype="image")
+        if inbound is not None:
+            if inbound.thread_ts:
+                self._reply_frames[inbound.thread_ts] = frame
+            await self.bus.publish_inbound(inbound)
+        else:
+            logger.info("[WeCom] skipped inbound frame: forced=image frame_keys=%s", sorted(frame.keys()))
 
-        text_block = body.get("text")
-        content = ""
-        if isinstance(text_block, Mapping):
-            content = str(text_block.get("content", "")).strip()
-        elif isinstance(body.get("content"), str):
-            content = str(body.get("content", "")).strip()
-        if not content:
+    async def _on_ws_mixed(self, frame: Mapping[str, Any]) -> None:
+        inbound = await self._parse_ws_frame(frame, forced_msgtype="mixed")
+        if inbound is not None:
+            if inbound.thread_ts:
+                self._reply_frames[inbound.thread_ts] = frame
+            await self.bus.publish_inbound(inbound)
+        else:
+            logger.info("[WeCom] skipped inbound frame: forced=mixed frame_keys=%s", sorted(frame.keys()))
+
+    async def _parse_ws_frame(
+        self,
+        frame: Mapping[str, Any],
+        *,
+        forced_msgtype: str | None = None,
+    ) -> InboundMessage | None:
+        raw_body = frame.get("body")
+        body: Mapping[str, Any]
+        if isinstance(raw_body, Mapping):
+            body = raw_body
+        else:
+            body = frame
+
+        content, files = await self._extract_ws_message_parts(frame, body, forced_msgtype=forced_msgtype)
+        if not content and not files:
             return None
 
         raw_chat_id = _first_non_empty(body, "chatid", "chat_id", "conversation_id", "chatId")
@@ -509,6 +546,7 @@ class WecomChannel(Channel):
             text=content,
             msg_type=InboundMessageType.COMMAND if content.startswith("/") else InboundMessageType.CHAT,
             thread_ts=thread_ref or None,
+            files=files,
             metadata={
                 "platform": "wecom",
                 "transport": "long_connection",
@@ -517,6 +555,281 @@ class WecomChannel(Channel):
         )
         inbound.topic_id = topic_id
         return inbound
+
+    async def _extract_ws_message_parts(
+        self,
+        frame: Mapping[str, Any],
+        body: Mapping[str, Any],
+        *,
+        forced_msgtype: str | None = None,
+    ) -> tuple[str, list[dict[str, Any]]]:
+        text_parts: list[str] = []
+        file_parts: list[dict[str, Any]] = []
+
+        text_block = body.get("text")
+        if isinstance(text_block, Mapping):
+            text_value = text_block.get("content")
+            if isinstance(text_value, str) and text_value.strip():
+                text_parts.append(text_value.strip())
+        elif isinstance(body.get("content"), str) and str(body.get("content")).strip():
+            text_parts.append(str(body.get("content")).strip())
+
+        direct_image = body.get("image")
+        if isinstance(direct_image, Mapping):
+            file_parts.append(await self._download_ws_image(frame, direct_image, 0))
+
+        image_list = body.get("images")
+        if isinstance(image_list, list):
+            for index, image_payload in enumerate(image_list, start=len(file_parts)):
+                if isinstance(image_payload, Mapping):
+                    file_parts.append(await self._download_ws_image(frame, image_payload, index))
+
+        raw_msg_type = str(forced_msgtype or frame.get("msgtype") or body.get("msgtype") or "").strip().lower()
+        mixed_source: Any = (
+            body.get("mixed")
+            or body.get("items")
+            or body.get("msg_items")
+            or body.get("mixed_items")
+        )
+        if mixed_source is None and raw_msg_type == "mixed":
+            mixed_source = body.get("content")
+        if mixed_source is None and raw_msg_type == "mixed":
+            mixed_source = body
+        mixed_text, mixed_files = await self._extract_ws_mixed_parts(frame, mixed_source)
+        if raw_msg_type == "mixed" and not mixed_text and not mixed_files:
+            mixed_text, mixed_files = await self._extract_ws_mixed_parts_fallback(frame, body)
+        text_parts.extend(mixed_text)
+        file_parts.extend(mixed_files)
+
+        return "\n".join(part for part in text_parts if part).strip(), file_parts
+
+    async def _extract_ws_mixed_parts(
+        self,
+        frame: Mapping[str, Any],
+        mixed_payload: Any,
+    ) -> tuple[list[str], list[dict[str, Any]]]:
+        if mixed_payload is None:
+            return [], []
+
+        parsed_payload = mixed_payload
+        if isinstance(parsed_payload, str):
+            try:
+                parsed_payload = json.loads(parsed_payload)
+            except json.JSONDecodeError:
+                return [], []
+
+        items: Any = None
+        if isinstance(parsed_payload, list):
+            items = parsed_payload
+        elif isinstance(parsed_payload, Mapping):
+            items = (
+                parsed_payload.get("items")
+                or parsed_payload.get("content")
+                or parsed_payload.get("list")
+                or parsed_payload.get("msg_items")
+            )
+            if isinstance(items, str):
+                try:
+                    items = json.loads(items)
+                except json.JSONDecodeError:
+                    items = None
+            if items is None and any(key in parsed_payload for key in ("image", "images", "text", "content", "url", "download_url", "image_url", "cdn_url")):
+                items = [parsed_payload]
+
+        if not isinstance(items, list):
+            return [], []
+
+        text_parts: list[str] = []
+        file_parts: list[dict[str, Any]] = []
+
+        for index, item in enumerate(items):
+            if not isinstance(item, Mapping):
+                continue
+
+            item_type = str(item.get("type") or item.get("msgtype") or "").strip().lower()
+            if not item_type:
+                if any(key in item for key in ("image", "images", "url", "download_url", "image_url", "cdn_url")):
+                    item_type = "image"
+                elif any(key in item for key in ("text", "content")):
+                    item_type = "text"
+            if item_type == "text":
+                nested_text = item.get("text")
+                if isinstance(nested_text, Mapping):
+                    text_value = nested_text.get("content")
+                    if isinstance(text_value, str) and text_value.strip():
+                        text_parts.append(text_value.strip())
+                elif isinstance(item.get("content"), str) and str(item.get("content")).strip():
+                    text_parts.append(str(item.get("content")).strip())
+                continue
+
+            if item_type == "image":
+                image_payload = item.get("image")
+                if isinstance(item.get("images"), list):
+                    for offset, nested_image in enumerate(item["images"], start=len(file_parts)):
+                        if isinstance(nested_image, Mapping):
+                            file_parts.append(await self._download_ws_image(frame, nested_image, index + offset))
+                    continue
+                if not isinstance(image_payload, Mapping) and any(key in item for key in ("url", "download_url", "image_url", "cdn_url")):
+                    image_payload = item
+                if isinstance(image_payload, Mapping):
+                    file_parts.append(await self._download_ws_image(frame, image_payload, index))
+
+        return text_parts, file_parts
+
+    async def _extract_ws_mixed_parts_fallback(
+        self,
+        frame: Mapping[str, Any],
+        payload: Any,
+    ) -> tuple[list[str], list[dict[str, Any]]]:
+        text_parts: list[str] = []
+        file_parts: list[dict[str, Any]] = []
+        seen_texts: set[str] = set()
+        seen_images: set[str] = set()
+
+        async def walk(node: Any) -> None:
+            if isinstance(node, list):
+                for item in node:
+                    await walk(item)
+                return
+
+            if not isinstance(node, Mapping):
+                return
+
+            nested_text = node.get("text")
+            if isinstance(nested_text, Mapping):
+                text_value = nested_text.get("content")
+                if isinstance(text_value, str):
+                    cleaned = text_value.strip()
+                    if cleaned and cleaned not in seen_texts:
+                        seen_texts.add(cleaned)
+                        text_parts.append(cleaned)
+
+            direct_content = node.get("content")
+            if isinstance(direct_content, str):
+                cleaned = direct_content.strip()
+                if (
+                    cleaned
+                    and not cleaned.startswith("{")
+                    and not cleaned.startswith("[")
+                    and not cleaned.startswith("http://")
+                    and not cleaned.startswith("https://")
+                    and cleaned not in seen_texts
+                ):
+                    seen_texts.add(cleaned)
+                    text_parts.append(cleaned)
+
+            image_payload = node.get("image")
+            if isinstance(image_payload, Mapping):
+                image_key = str(
+                    _first_non_empty(
+                        image_payload,
+                        "url",
+                        "download_url",
+                        "image_url",
+                        "cdn_url",
+                    )
+                    or _first_non_empty(node, "msgid", "msg_id", "id")
+                    or len(file_parts)
+                )
+                if image_key not in seen_images:
+                    seen_images.add(image_key)
+                    file_parts.append(await self._download_ws_image(frame, image_payload, len(file_parts)))
+
+            if isinstance(node.get("images"), list):
+                for nested_image in node["images"]:
+                    if isinstance(nested_image, Mapping):
+                        image_key = str(
+                            _first_non_empty(
+                                nested_image,
+                                "url",
+                                "download_url",
+                                "image_url",
+                                "cdn_url",
+                            )
+                            or len(file_parts)
+                        )
+                        if image_key not in seen_images:
+                            seen_images.add(image_key)
+                            file_parts.append(await self._download_ws_image(frame, nested_image, len(file_parts)))
+
+            for key in ("msg_item", "msgItem", "items", "msg_items", "mixed", "mixed_items", "content", "list"):
+                if key in node:
+                    await walk(node.get(key))
+
+            for value in node.values():
+                if isinstance(value, (Mapping, list)):
+                    await walk(value)
+
+        await walk(payload)
+        return text_parts, file_parts
+
+    async def _download_ws_image(
+        self,
+        frame: Mapping[str, Any],
+        image_payload: Mapping[str, Any],
+        index: int,
+    ) -> dict[str, Any]:
+        image_url = _first_non_empty(
+            image_payload,
+            "url",
+            "download_url",
+            "image_url",
+            "cdn_url",
+        )
+        aes_key = _first_non_empty(image_payload, "aeskey", "aes_key", "key")
+        if not image_url:
+            return {"error": f"第 {index + 1} 张图片缺少可下载地址，已跳过。", "is_image": True}
+
+        msg_ref = _first_non_empty(frame, "req_id", "msgid", "msg_id", "message_id") or f"frame-{index + 1}"
+        suffix = Path(urllib.parse.urlparse(image_url).path).suffix or ".jpg"
+        filename = str(image_payload.get("filename") or f"wecom-{msg_ref}-{index + 1}{suffix}")
+        mime_type = image_payload.get("mime_type")
+        if not isinstance(mime_type, str) or not mime_type:
+            mime_type = mimetypes.guess_type(filename)[0] or "image/jpeg"
+
+        try:
+            buffer = await self._download_long_connection_media(image_url, aes_key)
+        except Exception as exc:
+            logger.warning("[WeCom] failed to download image payload: %s", exc, exc_info=True)
+            return {"error": f"第 {index + 1} 张图片下载失败，已跳过。", "is_image": True}
+
+        return {
+            "filename": filename,
+            "mime_type": mime_type,
+            "size": len(buffer),
+            "buffer": buffer,
+            "is_image": True,
+        }
+
+    async def _download_long_connection_media(self, url: str, aes_key: str | None = None) -> bytes:
+        if self._ws_client is not None:
+            download_file = getattr(self._ws_client, "download_file", None)
+            if download_file is not None:
+                try:
+                    result = await download_file(url, aes_key) if aes_key else await download_file(url)
+                except TypeError:
+                    result = await download_file(url, aes_key)
+                if isinstance(result, bytes):
+                    return result
+                if isinstance(result, bytearray):
+                    return bytes(result)
+                if isinstance(result, Mapping):
+                    for key in ("data", "content", "file_bytes", "bytes"):
+                        value = result.get(key)
+                        if isinstance(value, bytes):
+                            return value
+                        if isinstance(value, bytearray):
+                            return bytes(value)
+                    buffer = result.get("buffer")
+                    if isinstance(buffer, bytes):
+                        return buffer
+                    if isinstance(buffer, bytearray):
+                        return bytes(buffer)
+
+        async with httpx.AsyncClient(timeout=self._download_timeout) as client:
+            response = await client.get(url)
+            response.raise_for_status()
+            return response.content
 
     def _parse_plain_message(self, plain_xml: str) -> InboundMessage | None:
         root = ET.fromstring(plain_xml)

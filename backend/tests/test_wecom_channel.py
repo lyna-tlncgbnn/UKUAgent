@@ -64,15 +64,17 @@ class TestWecomChannel:
                 "bot_secret": "secret-1",
             },
         )
-        inbound = channel._parse_ws_frame(
-            {
-                "req_id": "req-1",
-                "body": {
-                    "chatid": "chat-123",
-                    "userid": "user-1",
-                    "text": {"content": "/status"},
-                },
-            }
+        inbound = _run(
+            channel._parse_ws_frame(
+                {
+                    "req_id": "req-1",
+                    "body": {
+                        "chatid": "chat-123",
+                        "userid": "user-1",
+                        "text": {"content": "/status"},
+                    },
+                }
+            )
         )
         assert inbound is not None
         assert inbound.chat_id == "chat:chat-123"
@@ -89,19 +91,154 @@ class TestWecomChannel:
                 "bot_secret": "secret-1",
             },
         )
-        inbound = channel._parse_ws_frame(
-            {
-                "msgid": "msg-1",
-                "body": {
-                    "chattype": "single",
-                    "from": {"userid": "10300090"},
-                    "text": {"content": "hello"},
-                },
-            }
+        inbound = _run(
+            channel._parse_ws_frame(
+                {
+                    "msgid": "msg-1",
+                    "body": {
+                        "chattype": "single",
+                        "from": {"userid": "10300090"},
+                        "text": {"content": "hello"},
+                    },
+                }
+            )
         )
         assert inbound is not None
         assert inbound.chat_id == "user:10300090"
         assert inbound.user_id == "10300090"
+
+    def test_parse_long_connection_image_frame_downloads_image(self):
+        async def go():
+            channel = WecomChannel(
+                MessageBus(),
+                {
+                    "mode": "long_connection",
+                    "bot_id": "bot-1",
+                    "bot_secret": "secret-1",
+                },
+            )
+            channel._ws_client = MagicMock()
+            channel._ws_client.download_file = AsyncMock(return_value=b"image-bytes")
+
+            inbound = await channel._parse_ws_frame(
+                {
+                    "msgid": "msg-image-1",
+                    "body": {
+                        "from": {"userid": "10300090"},
+                        "image": {"url": "https://example.com/img.png", "aeskey": "k1"},
+                    },
+                }
+            )
+
+            assert inbound is not None
+            assert inbound.chat_id == "user:10300090"
+            assert inbound.text == ""
+            assert len(inbound.files) == 1
+            assert inbound.files[0]["buffer"] == b"image-bytes"
+            assert inbound.files[0]["is_image"] is True
+            channel._ws_client.download_file.assert_awaited_once()
+
+        _run(go())
+
+    def test_parse_long_connection_mixed_frame_supports_text_and_multiple_images(self):
+        async def go():
+            channel = WecomChannel(
+                MessageBus(),
+                {
+                    "mode": "long_connection",
+                    "bot_id": "bot-1",
+                    "bot_secret": "secret-1",
+                },
+            )
+            channel._ws_client = MagicMock()
+            channel._ws_client.download_file = AsyncMock(side_effect=[b"img-1", b"img-2"])
+
+            inbound = await channel._parse_ws_frame(
+                {
+                    "req_id": "req-mixed-1",
+                    "body": {
+                        "chatid": "chat-123",
+                        "userid": "user-1",
+                        "mixed": {
+                            "items": [
+                                {"type": "text", "text": {"content": "帮我看看这两张图"}},
+                                {"type": "image", "image": {"url": "https://example.com/1.png", "aeskey": "k1"}},
+                                {"type": "image", "image": {"url": "https://example.com/2.png", "aeskey": "k2"}},
+                            ]
+                        },
+                    },
+                }
+            )
+
+            assert inbound is not None
+            assert inbound.chat_id == "chat:chat-123"
+            assert inbound.text == "帮我看看这两张图"
+            assert len(inbound.files) == 2
+            assert [f["buffer"] for f in inbound.files] == [b"img-1", b"img-2"]
+
+        _run(go())
+
+    def test_parse_long_connection_mixed_frame_with_forced_type(self):
+        async def go():
+            channel = WecomChannel(
+                MessageBus(),
+                {
+                    "mode": "long_connection",
+                    "bot_id": "bot-1",
+                    "bot_secret": "secret-1",
+                },
+            )
+            channel._ws_client = MagicMock()
+            channel._ws_client.download_file = AsyncMock(return_value=b"img-1")
+
+            inbound = await channel._parse_ws_frame(
+                {
+                    "req_id": "req-mixed-forced-1",
+                    "body": {
+                        "from": {"userid": "10300090"},
+                        "text": {"content": "帮我看看这张图"},
+                        "image": {"url": "https://example.com/1.png", "aeskey": "k1"},
+                    },
+                },
+                forced_msgtype="mixed",
+            )
+
+            assert inbound is not None
+            assert inbound.chat_id == "user:10300090"
+            assert inbound.text == "帮我看看这张图"
+            assert len(inbound.files) == 1
+            assert inbound.files[0]["buffer"] == b"img-1"
+
+        _run(go())
+
+    def test_parse_long_connection_image_failure_preserves_note(self):
+        async def go():
+            channel = WecomChannel(
+                MessageBus(),
+                {
+                    "mode": "long_connection",
+                    "bot_id": "bot-1",
+                    "bot_secret": "secret-1",
+                },
+            )
+            channel._ws_client = MagicMock()
+            channel._ws_client.download_file = AsyncMock(side_effect=RuntimeError("boom"))
+
+            inbound = await channel._parse_ws_frame(
+                {
+                    "msgid": "msg-image-2",
+                    "body": {
+                        "from": {"userid": "10300090"},
+                        "image": {"url": "https://example.com/img.png", "aeskey": "k1"},
+                    },
+                }
+            )
+
+            assert inbound is not None
+            assert len(inbound.files) == 1
+            assert "下载失败" in inbound.files[0]["error"]
+
+        _run(go())
 
     def test_parse_user_text_message(self):
         channel = WecomChannel(
@@ -274,6 +411,61 @@ class TestWecomChannel:
 
             channel._ws_client.reply_stream.assert_awaited_once_with(frame, "stream-1", "hello back", finish=True)
             channel._ws_client.send_message.assert_not_called()
+
+        _run(go())
+
+    def test_long_connection_stream_reuses_stream_id_until_final(self):
+        async def go():
+            channel = WecomChannel(
+                MessageBus(),
+                {
+                    "mode": "long_connection",
+                    "bot_id": "bot-1",
+                    "bot_secret": "secret-1",
+                },
+            )
+            frame = {
+                "req_id": "req-456",
+                "body": {
+                    "from": {"userid": "10300090"},
+                    "text": {"content": "hi"},
+                },
+            }
+            channel._ws_client = MagicMock()
+            channel._ws_client.reply_stream = AsyncMock(return_value={})
+            channel._ws_client.send_message = AsyncMock(return_value={})
+            channel._generate_req_id = lambda prefix: "stream-2"
+
+            await channel._on_ws_text(frame)
+            await channel.send(
+                OutboundMessage(
+                    channel_name="wecom",
+                    chat_id="user:10300090",
+                    thread_id="t1",
+                    thread_ts="req-456",
+                    text="thinking...",
+                    is_final=False,
+                )
+            )
+            await channel.send(
+                OutboundMessage(
+                    channel_name="wecom",
+                    chat_id="user:10300090",
+                    thread_id="t1",
+                    thread_ts="req-456",
+                    text="done",
+                    is_final=True,
+                )
+            )
+
+            assert channel._ws_client.reply_stream.await_count == 2
+            first_call = channel._ws_client.reply_stream.await_args_list[0]
+            second_call = channel._ws_client.reply_stream.await_args_list[1]
+            assert first_call.args == (frame, "stream-2", "thinking...")
+            assert first_call.kwargs == {"finish": False}
+            assert second_call.args == (frame, "stream-2", "done")
+            assert second_call.kwargs == {"finish": True}
+            assert "req-456" not in channel._stream_ids
 
         _run(go())
 
