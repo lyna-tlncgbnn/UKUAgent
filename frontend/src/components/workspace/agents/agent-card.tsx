@@ -1,20 +1,18 @@
 "use client";
 
-import { BotIcon, MessageSquareIcon, Trash2Icon } from "lucide-react";
+import {
+  BotIcon,
+  MessageSquareIcon,
+  ShieldIcon,
+  Trash2Icon,
+  UsersIcon,
+} from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardFooter,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
 import {
   Dialog,
   DialogContent,
@@ -31,19 +29,37 @@ interface AgentCardProps {
   agent: Agent;
 }
 
+// Generate a deterministic accent color from agent slug
+function getAccentColor(slug: string) {
+  const palette = [
+    { bg: "from-blue-500/12 to-blue-500/4", text: "text-blue-600 dark:text-blue-400", ring: "ring-blue-500/10" },
+    { bg: "from-emerald-500/12 to-emerald-500/4", text: "text-emerald-600 dark:text-emerald-400", ring: "ring-emerald-500/10" },
+    { bg: "from-violet-500/12 to-violet-500/4", text: "text-violet-600 dark:text-violet-400", ring: "ring-violet-500/10" },
+    { bg: "from-amber-500/12 to-amber-500/4", text: "text-amber-600 dark:text-amber-400", ring: "ring-amber-500/10" },
+    { bg: "from-rose-500/12 to-rose-500/4", text: "text-rose-600 dark:text-rose-400", ring: "ring-rose-500/10" },
+    { bg: "from-cyan-500/12 to-cyan-500/4", text: "text-cyan-600 dark:text-cyan-400", ring: "ring-cyan-500/10" },
+  ];
+  let hash = 0;
+  for (let i = 0; i < slug.length; i++) {
+    hash = (hash * 31 + slug.charCodeAt(i)) | 0;
+  }
+  return palette[Math.abs(hash) % palette.length]!;
+}
+
 export function AgentCard({ agent }: AgentCardProps) {
   const { t } = useI18n();
   const router = useRouter();
   const deleteAgent = useDeleteAgent();
   const [deleteOpen, setDeleteOpen] = useState(false);
+  const accent = getAccentColor(agent.slug);
 
   function handleChat() {
-    router.push(`/workspace/agents/${agent.name}/chats/new`);
+    router.push(`/workspace/agents/${agent.slug}/chats/new`);
   }
 
   async function handleDelete() {
     try {
-      await deleteAgent.mutateAsync(agent.name);
+      await deleteAgent.mutateAsync(agent.slug);
       toast.success(t.agents.deleteSuccess);
       setDeleteOpen(false);
     } catch (err) {
@@ -53,62 +69,95 @@ export function AgentCard({ agent }: AgentCardProps) {
 
   return (
     <>
-      <Card className="group flex flex-col transition-shadow hover:shadow-md">
-        <CardHeader className="pb-3">
-          <div className="flex items-start justify-between gap-2">
-            <div className="flex items-center gap-2">
-              <div className="bg-primary/10 text-primary flex h-9 w-9 shrink-0 items-center justify-center rounded-lg">
-                <BotIcon className="h-5 w-5" />
-              </div>
-              <div className="min-w-0">
-                <CardTitle className="truncate text-base">
-                  {agent.name}
-                </CardTitle>
+      <div className="group relative flex flex-col overflow-hidden rounded-2xl border border-border/50 bg-card transition-all duration-200 hover:border-border hover:shadow-lg hover:shadow-black/[0.03]">
+        {/* ── Card body ────────────────────────────────────────────── */}
+        <div className="flex flex-1 flex-col gap-3 p-5">
+          {/* Icon + name row */}
+          <div className="flex items-start gap-3">
+            <div
+              className={`flex size-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br ${accent.bg} ring-1 ${accent.ring}`}
+            >
+              <BotIcon className={`size-5 ${accent.text}`} />
+            </div>
+            <div className="min-w-0 flex-1">
+              <h3 className="truncate text-[15px] font-semibold leading-snug">
+                {agent.name}
+              </h3>
+              <div className="mt-1.5 flex flex-wrap gap-1.5">
+                <Badge
+                  variant="secondary"
+                  className="rounded-full px-2 py-0.5 text-[10px] font-medium"
+                >
+                  {agent.visibility === "org_shared" ? (
+                    <>
+                      <UsersIcon className="mr-1 size-2.5" />
+                      {t.agents.visibilityOrgShared}
+                    </>
+                  ) : (
+                    <>
+                      <ShieldIcon className="mr-1 size-2.5" />
+                      {t.agents.visibilityPrivate}
+                    </>
+                  )}
+                </Badge>
                 {agent.model && (
-                  <Badge variant="secondary" className="mt-0.5 text-xs">
+                  <Badge
+                    variant="outline"
+                    className="rounded-full px-2 py-0.5 text-[10px] font-medium"
+                  >
                     {agent.model}
                   </Badge>
                 )}
               </div>
             </div>
           </div>
-          {agent.description && (
-            <CardDescription className="mt-2 line-clamp-2 text-sm">
-              {agent.description}
-            </CardDescription>
-          )}
-        </CardHeader>
 
-        {agent.tool_groups && agent.tool_groups.length > 0 && (
-          <CardContent className="pt-0 pb-3">
-            <div className="flex flex-wrap gap-1">
+          {/* Description */}
+          {agent.description && (
+            <p className="text-muted-foreground line-clamp-2 text-[13px] leading-relaxed">
+              {agent.description}
+            </p>
+          )}
+
+          {/* Tool groups */}
+          {agent.tool_groups && agent.tool_groups.length > 0 && (
+            <div className="flex flex-wrap gap-1.5">
               {agent.tool_groups.map((group) => (
-                <Badge key={group} variant="outline" className="text-xs">
+                <span
+                  key={group}
+                  className="bg-muted/60 text-muted-foreground inline-flex rounded-md px-2 py-0.5 text-[10px] font-medium"
+                >
                   {group}
-                </Badge>
+                </span>
               ))}
             </div>
-          </CardContent>
-        )}
+          )}
+        </div>
 
-        <CardFooter className="mt-auto flex items-center justify-between gap-2 pt-3">
-          <Button size="sm" className="flex-1" onClick={handleChat}>
-            <MessageSquareIcon className="mr-1.5 h-3.5 w-3.5" />
+        {/* ── Card footer ──────────────────────────────────────────── */}
+        <div className="flex items-center gap-2 border-t border-border/40 px-4 py-3">
+          <Button
+            size="sm"
+            variant="ghost"
+            className="h-8 flex-1 rounded-lg text-xs font-medium hover:bg-primary/5 hover:text-primary"
+            onClick={handleChat}
+          >
+            <MessageSquareIcon className="mr-1.5 size-3.5" />
             {t.agents.chat}
           </Button>
-          <div className="flex gap-1">
+          {agent.is_owner && (
             <Button
               size="icon"
               variant="ghost"
-              className="text-destructive hover:text-destructive h-8 w-8 shrink-0"
+              className="text-muted-foreground hover:text-destructive size-8 shrink-0 rounded-lg"
               onClick={() => setDeleteOpen(true)}
               title={t.agents.delete}
             >
-              <Trash2Icon className="h-3.5 w-3.5" />
+              <Trash2Icon className="size-3.5" />
             </Button>
-          </div>
-        </CardFooter>
-      </Card>
+          )}
+        </div>
+      </div>
 
       {/* Delete Confirm */}
       <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>

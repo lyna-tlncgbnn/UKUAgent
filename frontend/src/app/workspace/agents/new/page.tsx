@@ -12,10 +12,17 @@ import {
 } from "@/components/ai-elements/prompt-input";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { ArtifactsProvider } from "@/components/workspace/artifacts";
 import { MessageList } from "@/components/workspace/messages";
 import { ThreadContext } from "@/components/workspace/messages/context";
-import type { Agent } from "@/core/agents";
+import type { Agent, AgentVisibility } from "@/core/agents";
 import {
   AgentNameCheckError,
   checkAgentName,
@@ -42,6 +49,7 @@ export default function NewAgentPage() {
   const [isCheckingName, setIsCheckingName] = useState(false);
   const [agentName, setAgentName] = useState("");
   const [agent, setAgent] = useState<Agent | null>(null);
+  const [visibility, setVisibility] = useState<AgentVisibility>("private");
   // ── Step 2: chat ───────────────────────────────────────────────────────────
 
   // Stable thread ID — all turns belong to the same thread
@@ -95,11 +103,12 @@ export default function NewAgentPage() {
     await sendMessage(threadId, {
       text: t.agents.nameStepBootstrapMessage.replace("{name}", trimmed),
       files: [],
-    });
+    }, { agent_visibility: visibility });
   }, [
     nameInput,
     sendMessage,
     threadId,
+    visibility,
     t.agents.nameStepBootstrapMessage,
     t.agents.nameStepInvalidError,
     t.agents.nameStepAlreadyExistsError,
@@ -121,10 +130,10 @@ export default function NewAgentPage() {
       await sendMessage(
         threadId,
         { text: trimmed, files: [] },
-        { agent_name: agentName },
+        { agent_name: agentName, agent_visibility: visibility },
       );
     },
-    [thread.isLoading, sendMessage, threadId, agentName],
+    [thread.isLoading, sendMessage, threadId, agentName, visibility],
   );
 
   // ── Shared header ──────────────────────────────────────────────────────────
@@ -179,6 +188,29 @@ export default function NewAgentPage() {
               {nameError && (
                 <p className="text-destructive text-sm">{nameError}</p>
               )}
+              <div className="space-y-2">
+                <p className="text-muted-foreground text-sm">
+                  {t.agents.visibilityLabel}
+                </p>
+                <Select
+                  value={visibility}
+                  onValueChange={(value) =>
+                    setVisibility(value as AgentVisibility)
+                  }
+                >
+                  <SelectTrigger className="w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="private">
+                      {t.agents.visibilityPrivate}
+                    </SelectItem>
+                    <SelectItem value="org_shared">
+                      {t.agents.visibilityOrgShared}
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
               <Button
                 className="w-full"
                 onClick={() => void handleConfirmName()}
@@ -223,7 +255,7 @@ export default function NewAgentPage() {
                       <Button
                         onClick={() =>
                           router.push(
-                            `/workspace/agents/${agentName}/chats/new`,
+                            `/workspace/agents/${agent.slug}/chats/new`,
                           )
                         }
                       >

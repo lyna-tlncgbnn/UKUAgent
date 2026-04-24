@@ -1,11 +1,10 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { LockKeyholeIcon, MailIcon } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { useMemo, useState } from "react";
 import { Toaster, toast } from "sonner";
 
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { signInWithPassword } from "@/core/auth/api";
 import { useI18n } from "@/core/i18n/hooks";
 
@@ -53,38 +52,83 @@ export function LoginForm() {
 
   return (
     <>
-      <form className="space-y-4" onSubmit={handleSubmit}>
-        <div className="space-y-2">
-          <label className="text-sm font-medium" htmlFor="login-email">
+      <form className="space-y-5" onSubmit={handleSubmit}>
+        <div className="space-y-1.5">
+          <label
+            className="text-xs font-medium text-white/50"
+            htmlFor="login-email"
+          >
             {t.auth.emailLabel}
           </label>
-          <Input
-            id="login-email"
-            autoComplete="email"
-            type="email"
-            value={email}
-            onChange={(event) => setEmail(event.target.value)}
-            placeholder="you@example.com"
-            required
-          />
+          <div className="relative">
+            <MailIcon className="pointer-events-none absolute top-1/2 left-3.5 size-4 -translate-y-1/2 text-white/25" />
+            <input
+              id="login-email"
+              autoComplete="email"
+              type="email"
+              value={email}
+              onChange={(event) => setEmail(event.target.value)}
+              placeholder="you@example.com"
+              required
+              className="h-11 w-full rounded-xl border border-white/10 bg-white/[0.07] pl-10 pr-4 text-sm text-white shadow-sm outline-none transition-all placeholder:text-white/20 hover:border-white/20 focus:border-white/30 focus:bg-white/10 focus:ring-2 focus:ring-white/10"
+            />
+          </div>
         </div>
-        <div className="space-y-2">
-          <label className="text-sm font-medium" htmlFor="login-password">
+
+        <div className="space-y-1.5">
+          <label
+            className="text-xs font-medium text-white/50"
+            htmlFor="login-password"
+          >
             {t.auth.passwordLabel}
           </label>
-          <Input
-            id="login-password"
-            autoComplete="current-password"
-            type="password"
-            value={password}
-            onChange={(event) => setPassword(event.target.value)}
-            placeholder="********"
-            required
-          />
+          <div className="relative">
+            <LockKeyholeIcon className="pointer-events-none absolute top-1/2 left-3.5 size-4 -translate-y-1/2 text-white/25" />
+            <input
+              id="login-password"
+              autoComplete="current-password"
+              type="password"
+              value={password}
+              onChange={(event) => setPassword(event.target.value)}
+              placeholder="••••••••"
+              required
+              className="h-11 w-full rounded-xl border border-white/10 bg-white/[0.07] pl-10 pr-4 text-sm text-white shadow-sm outline-none transition-all placeholder:text-white/20 hover:border-white/20 focus:border-white/30 focus:bg-white/10 focus:ring-2 focus:ring-white/10"
+            />
+          </div>
         </div>
-        <Button className="w-full" disabled={isSubmitting} type="submit">
-          {isSubmitting ? t.auth.signingIn : t.auth.signIn}
-        </Button>
+
+        <button
+          className="flex h-11 w-full items-center justify-center rounded-xl bg-white/90 text-sm font-semibold text-[#0f3d36] shadow-lg shadow-black/10 transition-all hover:bg-white hover:shadow-xl hover:shadow-black/15 focus:outline-none focus:ring-2 focus:ring-white/40 focus:ring-offset-2 focus:ring-offset-transparent active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-60"
+          disabled={isSubmitting}
+          type="submit"
+        >
+          {isSubmitting ? (
+            <span className="flex items-center gap-2">
+              <svg
+                className="size-4 animate-spin"
+                viewBox="0 0 24 24"
+                fill="none"
+              >
+                <circle
+                  className="opacity-25"
+                  cx="12"
+                  cy="12"
+                  r="10"
+                  stroke="currentColor"
+                  strokeWidth="4"
+                />
+                <path
+                  className="opacity-75"
+                  fill="currentColor"
+                  d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                />
+              </svg>
+              {t.auth.signingIn}
+            </span>
+          ) : (
+            t.auth.signIn
+          )}
+        </button>
       </form>
       <Toaster position="top-center" />
     </>

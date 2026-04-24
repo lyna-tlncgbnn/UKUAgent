@@ -13,8 +13,11 @@ import logging
 from datetime import UTC, datetime
 from typing import Any
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, Field
+
+from app.gateway.auth import get_optional_current_user, require_business_store
+from app.persistence.models import AgentVisibility
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/assistants", tags=["assistants-compat"])
@@ -56,29 +59,35 @@ def _get_default_assistant() -> AssistantResponse:
     )
 
 
-def _list_assistants() -> list[AssistantResponse]:
+async def _list_assistants(request: Request) -> list[AssistantResponse]:
     """List all available assistants from config."""
     assistants = [_get_default_assistant()]
 
-    # Also include custom agents from config.yaml agents directory
     try:
-        from deerflow.config.agents_config import list_custom_agents
-
-        for agent_cfg in list_custom_agents():
-            now = datetime.now(UTC).isoformat()
-            assistants.append(
-                AssistantResponse(
-                    assistant_id=agent_cfg.name,
-                    graph_id="lead_agent",  # All agents use the same graph
-                    name=agent_cfg.name,
-                    config={},
-                    metadata={"created_by": "user"},
-                    description=agent_cfg.description or "",
-                    created_at=now,
-                    updated_at=now,
-                    version=1,
+        current_user = get_optional_current_user(request)
+        if current_user is not None:
+            business_store = require_business_store(request)
+            records = await business_store.list_accessible_agents(current_user.id)
+            for record in records:
+                now = datetime.now(UTC).isoformat()
+                assistants.append(
+                    AssistantResponse(
+                        assistant_id=record.slug,
+                        graph_id="lead_agent",
+                        name=record.name,
+                        config={},
+                        metadata={
+                            "created_by": record.owner_user_id,
+                            "visibility": record.visibility.value
+                            if isinstance(record.visibility, AgentVisibility)
+                            else str(record.visibility),
+                        },
+                        description=record.description or "",
+                        created_at=now,
+                        updated_at=now,
+                        version=1,
+                    )
                 )
-            )
     except Exception:
         logger.debug("Could not load custom agents for assistants list")
 
@@ -86,12 +95,12 @@ def _list_assistants() -> list[AssistantResponse]:
 
 
 @router.post("/search", response_model=list[AssistantResponse])
-async def search_assistants(body: AssistantSearchRequest | None = None) -> list[AssistantResponse]:
+async def search_assistants(request: Request, body: AssistantSearchRequest | None = None) -> list[AssistantResponse]:
     """Search assistants.
 
     Returns all registered assistants (lead_agent + custom agents from config).
     """
-    assistants = _list_assistants()
+    assistants = await _list_assistants(request)
 
     if body and body.graph_id:
         assistants = [a for a in assistants if a.graph_id == body.graph_id]
@@ -104,22 +113,22 @@ async def search_assistants(body: AssistantSearchRequest | None = None) -> list[
 
 
 @router.get("/{assistant_id}", response_model=AssistantResponse)
-async def get_assistant_compat(assistant_id: str) -> AssistantResponse:
+async def get_assistant_compat(request: Request, assistant_id: str) -> AssistantResponse:
     """Get an assistant by ID."""
-    for a in _list_assistants():
+    for a in await _list_assistants(request):
         if a.assistant_id == assistant_id:
             return a
     raise HTTPException(status_code=404, detail=f"Assistant {assistant_id} not found")
 
 
 @router.get("/{assistant_id}/graph")
-async def get_assistant_graph(assistant_id: str) -> dict:
+async def get_assistant_graph(request: Request, assistant_id: str) -> dict:
     """Get the graph structure for an assistant.
 
     Returns a minimal graph description. Full graph introspection is
     not supported in the Gateway — this stub satisfies SDK validation.
     """
-    found = any(a.assistant_id == assistant_id for a in _list_assistants())
+    found = any(a.assistant_id == assistant_id for a in await _list_assistants(request))
     if not found:
         raise HTTPException(status_code=404, detail=f"Assistant {assistant_id} not found")
 
@@ -131,12 +140,12 @@ async def get_assistant_graph(assistant_id: str) -> dict:
 
 
 @router.get("/{assistant_id}/schemas")
-async def get_assistant_schemas(assistant_id: str) -> dict:
+async def get_assistant_schemas(request: Request, assistant_id: str) -> dict:
     """Get JSON schemas for an assistant's input/output/state.
 
     Returns empty schemas — full introspection not supported in Gateway.
     """
-    found = any(a.assistant_id == assistant_id for a in _list_assistants())
+    found = any(a.assistant_id == assistant_id for a in await _list_assistants(request))
     if not found:
         raise HTTPException(status_code=404, detail=f"Assistant {assistant_id} not found")
 

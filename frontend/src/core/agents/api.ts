@@ -21,9 +21,9 @@ export async function listAgents(): Promise<Agent[]> {
   return data.agents;
 }
 
-export async function getAgent(name: string): Promise<Agent> {
-  const res = await fetch(`${getBackendBaseURL()}/api/agents/${name}`);
-  if (!res.ok) throw new Error(`Agent '${name}' not found`);
+export async function getAgent(slug: string): Promise<Agent> {
+  const res = await fetch(`${getBackendBaseURL()}/api/agents/${slug}`);
+  if (!res.ok) throw new Error(`Agent '${slug}' not found`);
   return res.json() as Promise<Agent>;
 }
 
@@ -41,10 +41,10 @@ export async function createAgent(request: CreateAgentRequest): Promise<Agent> {
 }
 
 export async function updateAgent(
-  name: string,
+  slug: string,
   request: UpdateAgentRequest,
 ): Promise<Agent> {
-  const res = await fetch(`${getBackendBaseURL()}/api/agents/${name}`, {
+  const res = await fetch(`${getBackendBaseURL()}/api/agents/${slug}`, {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(request),
@@ -56,8 +56,8 @@ export async function updateAgent(
   return res.json() as Promise<Agent>;
 }
 
-export async function deleteAgent(name: string): Promise<void> {
-  const res = await fetch(`${getBackendBaseURL()}/api/agents/${name}`, {
+export async function deleteAgent(slug: string): Promise<void> {
+  const res = await fetch(`${getBackendBaseURL()}/api/agents/${slug}`, {
     method: "DELETE",
   });
   if (!res.ok) throw new Error(`Failed to delete agent: ${res.statusText}`);

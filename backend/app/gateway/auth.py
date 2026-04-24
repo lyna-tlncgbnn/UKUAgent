@@ -6,7 +6,7 @@ from typing import Any
 
 from fastapi import HTTPException, Request, status
 
-from app.persistence import BusinessStore, ThreadRecord, UserRole
+from app.persistence import AgentRecord, AgentVisibility, BusinessStore, ThreadRecord, UserRole
 
 logger = logging.getLogger(__name__)
 
@@ -130,3 +130,30 @@ async def require_owned_thread(
     if thread.user_id != user.id:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Thread {thread_id} not found")
     return thread
+
+
+async def require_accessible_agent(
+    request: Request,
+    slug: str,
+    *,
+    owner_only: bool = False,
+) -> AgentRecord:
+    """Require the current user to access the given agent slug."""
+
+    user = require_current_user(request)
+    store = require_business_store(request)
+    agent = await store.get_agent_by_slug(slug)
+    if agent is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Agent '{slug}' not found")
+
+    is_owner = agent.owner_user_id == user.id
+    is_shared = agent.visibility == AgentVisibility.ORG_SHARED
+
+    if owner_only:
+        if not is_owner:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Agent '{slug}' not found")
+        return agent
+
+    if not is_owner and not is_shared:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Agent '{slug}' not found")
+    return agent

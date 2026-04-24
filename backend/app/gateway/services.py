@@ -18,6 +18,7 @@ from fastapi import HTTPException, Request
 from langchain_core.messages import HumanMessage
 
 from app.gateway.auth import get_optional_current_user
+from app.persistence.models import AgentVisibility
 from app.gateway.deps import get_business_store, get_checkpointer, get_run_manager, get_store, get_stream_bridge
 from deerflow.runtime import (
     END_SENTINEL,
@@ -274,6 +275,19 @@ async def start_run(
     store = get_store(request)
     business_store = get_business_store(request)
     current_user = get_optional_current_user(request)
+
+    if (
+        business_store is not None
+        and current_user is not None
+        and body.assistant_id
+        and body.assistant_id != _DEFAULT_ASSISTANT_ID
+    ):
+        normalized_agent = body.assistant_id.strip().lower().replace("_", "-")
+        record = await business_store.get_agent_by_slug(normalized_agent)
+        if record is None:
+            raise HTTPException(status_code=404, detail=f"Agent '{normalized_agent}' not found")
+        if record.owner_user_id != current_user.id and record.visibility != AgentVisibility.ORG_SHARED:
+            raise HTTPException(status_code=404, detail=f"Agent '{normalized_agent}' not found")
 
     disconnect = DisconnectMode.cancel if body.on_disconnect == "cancel" else DisconnectMode.continue_
 

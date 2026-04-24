@@ -29,10 +29,10 @@ Completed:
 - Step 06C: thread list closure
 - Step 06D: upload closure
 - Step 06E: user provisioning
+- Step 07: custom agents visibility
 
 Next:
 
-- Step 07: custom agents as `private` / `org_shared`
 - Step 08: MCP filtering by role
 - Step 09: cleanup of remaining dev-only global logic
 
@@ -59,11 +59,12 @@ Next:
 - [Step 06C - Thread List Closure](D:\Project\deer-flow2\docs\multi-user-server\step-06c-thread-list-closure.md)
 - [Step 06D - Upload Closure](D:\Project\deer-flow2\docs\multi-user-server\step-06d-upload-closure.md)
 - [Step 06E - User Provisioning](D:\Project\deer-flow2\docs\multi-user-server\step-06e-user-provisioning.md)
+- [Step 07 - Custom Agents Visibility](D:\Project\deer-flow2\docs\multi-user-server\step-07-custom-agents-visibility.md)
 
 ## Current Known Boundaries
 
 - The current checkpoint/store setup is transitional and intended to be moved
   toward PostgreSQL for server deployment.
 - Auth storage is still file-backed for now.
-- Custom agents are not yet fully migrated to multi-user ownership and
-  visibility.
+- Custom agents now support ownership and `private` / `org_shared`
+  visibility, but runtime still uses a filesystem mirror for compatibility.

@@ -43,6 +43,7 @@ export default function AgentChatPage() {
   const { showNotification } = useNotification();
   const [thread, sendMessage] = useThreadStream({
     threadId: isNewThread ? undefined : threadId,
+    assistantId: agent_name,
     context: { ...settings.context, agent_name: agent_name },
     onStart: (startedThreadId) => {
       setThreadId(startedThreadId);

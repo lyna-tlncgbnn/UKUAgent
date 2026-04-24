@@ -9,8 +9,10 @@ const BACKEND_BASE_URL =
 const AUTH_PROXY_SECRET =
   process.env.DEER_FLOW_AUTH_PROXY_SECRET ?? "deerflow-dev-auth-proxy-secret";
 
-function buildBackendUrl(pathname: string) {
-  return new URL(pathname, BACKEND_BASE_URL);
+function buildBackendUrl(pathname: string, search: string) {
+  const url = new URL(pathname, BACKEND_BASE_URL);
+  url.search = search;
+  return url;
 }
 
 function attachTrustedUserHeaders(
@@ -60,7 +62,7 @@ async function proxyRequest(
 
   const pathname = `/${path.join("/")}`;
   const hasBody = !["GET", "HEAD"].includes(request.method);
-  const response = await fetch(buildBackendUrl(pathname), {
+  const response = await fetch(buildBackendUrl(pathname, request.nextUrl.search), {
     method: request.method,
     headers,
     body: hasBody ? await request.arrayBuffer() : undefined,

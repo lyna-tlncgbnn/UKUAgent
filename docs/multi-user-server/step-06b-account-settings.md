@@ -1,41 +1,72 @@
 # Step 06B - Account Settings
 
 ## Goal
-在设置弹窗里补齐“用户信息/账号”分区，让当前登录用户可以查看账号信息、编辑显示名和个人说明、修改密码、退出登录。
+
+Add a proper account section to the settings dialog so the current logged-in
+user can:
+
+- view account identity information
+- edit display name and profile text
+- change password
+- sign out
 
 ## What Changed
-- 在 `frontend/src/components/workspace/settings/settings-dialog.tsx` 新增了 `account` section，并加入左侧设置导航。
-- 新增 `frontend/src/components/workspace/settings/account-settings-page.tsx`，承载账号页内容。
-- 账号页展示：
-  - 用户 ID
-  - 邮箱
-  - 角色
-  - 显示名
-  - 个人说明/Profile
-- 账号页支持：
-  - 修改显示名
-  - 更新 Profile 文本
-  - 修改密码
-  - 退出登录
-- 前端新增认证 hooks 和 API 封装：
-  - `frontend/src/core/auth/api.ts`
-  - `frontend/src/core/auth/hooks.ts`
-- Profile 仍走后端现有 per-user profile 链路；账号基础信息则来自前端 session。
+
+- Added an `account` section to the settings navigation.
+- Added `frontend/src/components/workspace/settings/account-settings-page.tsx`
+  as the dedicated account page.
+- Split the page into clearer product-style sections:
+  - account overview
+  - editable profile
+  - password/security
+  - session/sign-out
+- Kept account identity fields and editable profile fields visually separate,
+  instead of rendering everything as the same kind of form field.
+- Continued to use:
+  - frontend session data for account identity
+  - per-user profile storage for profile text
 
 ## Interfaces
-- 账号信息读取：`GET /api/auth/session`
-- 修改显示名：`PATCH /api/auth/profile`
-- 修改密码：`POST /api/auth/change-password`
-- 登出：`POST /api/auth/logout`
-- 用户 Profile：
+
+- Session info: `GET /api/auth/session`
+- Update display name: `PATCH /api/auth/profile`
+- Change password: `POST /api/auth/change-password`
+- Sign out: `POST /api/auth/logout`
+- User profile:
   - `GET /api/user-profile`
   - `PUT /api/user-profile`
 
 ## Verification
-- 已检查设置弹窗 section 切换、账号表单、密码表单和登出动作的前端调用链路。
-- 已确认账号页的数据源分离：session 信息与 user profile 不再混成一块。
+
+- Checked the settings navigation and account page render path.
+- Verified that display-name save, profile save, password update, and sign-out
+  still use the same hooks and API contracts as before.
+- Limited this change to UI structure and presentation; no backend behavior was
+  changed.
 
 ## Known Limits
-- 首版不提供用户管理后台。
-- 首版没有邀请成员、组织管理和角色编辑入口。
-- 当前没有把用户昵称同步展示到侧边栏头像位；这可以在后续 UI 收尾时补充。
+
+- There is still no admin UI for user management.
+- There is still no invite flow, org management, or role editor.
+- Auth user storage is still file-backed for now.
+
+## Update - UI Refresh
+
+- Refreshed the account page layout to follow a more standard product pattern:
+  overview card first, edit form second, security/session actions later.
+- Read-only identity data such as email, role, and user ID now reads like
+  account metadata instead of looking like editable form inputs.
+- Added a lightweight avatar/initials block and a role badge to improve
+  scannability.
+- Reduced the visual weight of the profile editor and grouped password changes
+  into a dedicated security card.
+
+## Update - Simplified Scope
+
+- The account page was later simplified again based on product feedback.
+- Removed:
+  - profile editing
+  - password change
+  - session card
+- The page now only keeps a compact account overview plus a single sign-out
+  action.

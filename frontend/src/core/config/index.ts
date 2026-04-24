@@ -30,11 +30,12 @@ export function getLangGraphBaseURL(isMock?: boolean) {
     }
     return "http://localhost:3000/mock/api";
   } else {
-    // LangGraph SDK requires a full URL, construct it from current origin
+    // Default to the Next.js backend proxy so authenticated user context
+    // reaches the Gateway-backed LangGraph-compatible API.
     if (typeof window !== "undefined") {
-      return `${window.location.origin}/api/langgraph`;
+      return `${window.location.origin}/api/backend/api`;
     }
     // Fallback for SSR
-    return "http://localhost:2026/api/langgraph";
+    return "http://localhost:2026/api/backend/api";
   }
 }

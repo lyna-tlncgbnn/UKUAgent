@@ -5,6 +5,7 @@ from contextlib import asynccontextmanager
 
 from sqlalchemy import delete, or_, select
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.orm import selectinload
 
 from deerflow.config.app_config import get_app_config
 
@@ -109,6 +110,14 @@ class BusinessStore:
     async def list_threads_for_user(self, user_id: str) -> list[ThreadRecord]:
         async with self.session() as session:
             result = await session.execute(select(ThreadRecord).where(ThreadRecord.user_id == user_id).order_by(ThreadRecord.updated_at.desc()))
+            return list(result.scalars().all())
+
+    async def list_threads(self, limit: int | None = None) -> list[ThreadRecord]:
+        async with self.session() as session:
+            stmt = select(ThreadRecord).order_by(ThreadRecord.updated_at.desc())
+            if limit is not None:
+                stmt = stmt.limit(limit)
+            result = await session.execute(stmt)
             return list(result.scalars().all())
 
     async def record_thread_file(
@@ -248,17 +257,38 @@ class BusinessStore:
 
     async def get_agent_by_slug(self, slug: str) -> AgentRecord | None:
         async with self.session() as session:
-            result = await session.execute(select(AgentRecord).where(AgentRecord.slug == slug))
+            result = await session.execute(
+                select(AgentRecord)
+                .options(selectinload(AgentRecord.content))
+                .where(AgentRecord.slug == slug)
+            )
             return result.scalar_one_or_none()
 
     async def list_accessible_agents(self, user_id: str) -> list[AgentRecord]:
         async with self.session() as session:
             result = await session.execute(
                 select(AgentRecord)
+                .options(selectinload(AgentRecord.content))
                 .where(or_(AgentRecord.owner_user_id == user_id, AgentRecord.visibility == AgentVisibility.ORG_SHARED))
                 .order_by(AgentRecord.updated_at.desc())
             )
             return list(result.scalars().all())
+
+    async def is_agent_slug_available(self, slug: str) -> bool:
+        async with self.session() as session:
+            result = await session.execute(select(AgentRecord.id).where(AgentRecord.slug == slug))
+            return result.scalar_one_or_none() is None
+
+    async def delete_agent_by_slug(self, slug: str) -> bool:
+        async with self.session() as session:
+            record = await session.execute(select(AgentRecord).where(AgentRecord.slug == slug))
+            agent = record.scalar_one_or_none()
+            if agent is None:
+                return False
+            await session.delete(agent)
+            await session.commit()
+            return True
+
 
     async def upsert_mcp_rule(
         self,

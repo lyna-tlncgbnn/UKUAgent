@@ -104,6 +104,7 @@ services:
       - DEER_FLOW_HOME=/app/.deer-flow
       - DEER_FLOW_INTERNAL_GATEWAY_BASE_URL=http://gateway:8001
       - DEER_FLOW_INTERNAL_LANGGRAPH_BASE_URL=http://langgraph:2024
+      - NEXT_PUBLIC_LANGGRAPH_BASE_URL=/api/backend/api
       - DEER_FLOW_AUTH_SEED_USERS=${DEER_FLOW_AUTH_SEED_USERS:-[{"email":"admin@mindigitalgroup.com","password":"ChangeMe123!","name":"Mindigital Admin","role":"admin"},{"email":"alice@mindigitalgroup.com","password":"ChangeMe123!","name":"Alice Chen","role":"member"},{"email":"bob@mindigitalgroup.com","password":"ChangeMe123!","name":"Bob Liu","role":"member"},{"email":"carol@mindigitalgroup.com","password":"ChangeMe123!","name":"Carol Wang","role":"member"},{"email":"david@mindigitalgroup.com","password":"ChangeMe123!","name":"David Zhang","role":"member"}]}
     env_file:
       - ../frontend/.env

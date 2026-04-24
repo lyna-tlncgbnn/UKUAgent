@@ -17,11 +17,11 @@ export function useAgents() {
   return { agents: data ?? [], isLoading, error };
 }
 
-export function useAgent(name: string | null | undefined) {
+export function useAgent(slug: string | null | undefined) {
   const { data, isLoading, error } = useQuery({
-    queryKey: ["agents", name],
-    queryFn: () => getAgent(name!),
-    enabled: !!name,
+    queryKey: ["agents", slug],
+    queryFn: () => getAgent(slug!),
+    enabled: !!slug,
   });
   return { agent: data ?? null, isLoading, error };
 }

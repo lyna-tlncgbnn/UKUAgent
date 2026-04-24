@@ -30,6 +30,7 @@ The following workstreams have already landed:
 - recent-chat list closure for logged-in users
 - upload flow closure for new-thread + real-thread-id behavior
 - shared SQLite checkpointer/store so thread state survives restart
+- custom agents with owner-aware `private` / `org_shared` visibility
 
 ## Current Runtime Shape
 
@@ -59,9 +60,8 @@ This is an intentional transitional architecture:
 
 The next planned work items are:
 
-1. Step 7: custom agents with `private` and `org_shared` visibility
-2. Step 8: MCP visibility filtering by role
-3. Step 9: cleanup of remaining single-user / dev-only global logic
+1. Step 8: MCP visibility filtering by role
+2. Step 9: cleanup of remaining single-user / dev-only global logic
 
 ## Important Docs
 

@@ -26,6 +26,7 @@ export type ToolEndEvent = {
 
 export type ThreadStreamOptions = {
   threadId?: string | null | undefined;
+  assistantId?: string;
   context: LocalSettings["context"];
   isMock?: boolean;
   onStart?: (threadId: string) => void;
@@ -58,6 +59,7 @@ function getStreamErrorMessage(error: unknown): string {
 
 export function useThreadStream({
   threadId,
+  assistantId = "lead_agent",
   context,
   isMock,
   onStart,
@@ -113,7 +115,7 @@ export function useThreadStream({
 
   const thread = useStream<AgentThreadState>({
     client: getAPIClient(isMock),
-    assistantId: "lead_agent",
+    assistantId,
     threadId: onStreamThreadId,
     reconnectOnMount: true,
     fetchStateHistory: { limit: 1 },
