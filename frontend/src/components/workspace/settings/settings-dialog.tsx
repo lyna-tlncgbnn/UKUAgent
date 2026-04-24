@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  UserIcon,
   BellIcon,
   BrainIcon,
   PaletteIcon,
@@ -17,6 +18,7 @@ import {
 } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { AppearanceSettingsPage } from "@/components/workspace/settings/appearance-settings-page";
+import { AccountSettingsPage } from "@/components/workspace/settings/account-settings-page";
 import { MemorySettingsPage } from "@/components/workspace/settings/memory-settings-page";
 import { NotificationSettingsPage } from "@/components/workspace/settings/notification-settings-page";
 import { SkillSettingsPage } from "@/components/workspace/settings/skill-settings-page";
@@ -25,6 +27,7 @@ import { useI18n } from "@/core/i18n/hooks";
 import { cn } from "@/lib/utils";
 
 type SettingsSection =
+  | "account"
   | "appearance"
   | "memory"
   | "tools"
@@ -51,6 +54,11 @@ export function SettingsDialog(props: SettingsDialogProps) {
   const sections = useMemo(
     () => [
       {
+        id: "account",
+        label: t.settings.sections.account,
+        icon: UserIcon,
+      },
+      {
         id: "appearance",
         label: t.settings.sections.appearance,
         icon: PaletteIcon,
@@ -69,6 +77,7 @@ export function SettingsDialog(props: SettingsDialogProps) {
       { id: "skills", label: t.settings.sections.skills, icon: SparklesIcon },
     ],
     [
+      t.settings.sections.account,
       t.settings.sections.appearance,
       t.settings.sections.memory,
       t.settings.sections.tools,
@@ -118,6 +127,7 @@ export function SettingsDialog(props: SettingsDialogProps) {
           </nav>
           <ScrollArea className="h-full min-h-0 rounded-lg border">
             <div className="space-y-8 p-6">
+              {activeSection === "account" && <AccountSettingsPage />}
               {activeSection === "appearance" && <AppearanceSettingsPage />}
               {activeSection === "memory" && <MemorySettingsPage />}
               {activeSection === "tools" && <ToolSettingsPage />}

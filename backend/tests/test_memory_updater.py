@@ -7,8 +7,11 @@ from deerflow.agents.memory.updater import (
     clear_memory_data,
     create_memory_fact,
     delete_memory_fact,
+    get_memory_data,
+    get_user_profile_markdown,
     import_memory_data,
     update_memory_fact,
+    update_user_profile_markdown,
 )
 from deerflow.config.memory_config import MemoryConfig
 
@@ -257,6 +260,41 @@ def test_import_memory_data_saves_and_returns_imported_memory() -> None:
     mock_storage.save.assert_called_once_with(imported_memory, None)
     mock_storage.load.assert_called_once_with(None)
     assert result == imported_memory
+
+
+def test_get_memory_data_uses_business_store_when_user_id_provided() -> None:
+    user_memory = _make_memory(
+        facts=[
+            {
+                "id": "fact_user",
+                "content": "User prefers per-user memory",
+                "category": "preference",
+                "confidence": 0.9,
+                "createdAt": "2026-03-20T00:00:00Z",
+                "source": "thread-user",
+            }
+        ]
+    )
+
+    with patch("deerflow.agents.memory.updater.load_user_memory_from_business_store", return_value=user_memory) as load_user_memory:
+        result = get_memory_data(user_id="user-1")
+
+    load_user_memory.assert_called_once_with("user-1")
+    assert result == user_memory
+
+
+def test_user_profile_helpers_use_business_store_when_user_id_provided() -> None:
+    with (
+        patch("deerflow.agents.memory.updater.load_user_profile_from_business_store", return_value="# Profile") as load_profile,
+        patch("deerflow.agents.memory.updater.save_user_profile_to_business_store", return_value=True) as save_profile,
+    ):
+        content = get_user_profile_markdown("user-1")
+        saved = update_user_profile_markdown("user-1", "# Updated")
+
+    load_profile.assert_called_once_with("user-1")
+    save_profile.assert_called_once_with("user-1", "# Updated")
+    assert content == "# Profile"
+    assert saved is True
 
 
 def test_update_memory_fact_updates_only_matching_fact() -> None:

@@ -6,6 +6,7 @@
   "scripts": {
     "demo:save": "node scripts/save-demo.js",
     "build": "next build",
+    "auth:seed": "node scripts/seed-auth-user.mjs",
     "check": "eslint . --ext .ts,.tsx && tsc --noEmit",
     "dev": "next dev --turbo",
     "format": "prettier --check .",

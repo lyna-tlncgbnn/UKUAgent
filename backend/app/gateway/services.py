@@ -17,7 +17,8 @@ from typing import Any
 from fastapi import HTTPException, Request
 from langchain_core.messages import HumanMessage
 
-from app.gateway.deps import get_checkpointer, get_run_manager, get_store, get_stream_bridge
+from app.gateway.auth import get_optional_current_user
+from app.gateway.deps import get_business_store, get_checkpointer, get_run_manager, get_store, get_stream_bridge
 from deerflow.runtime import (
     END_SENTINEL,
     HEARTBEAT_SENTINEL,
@@ -116,6 +117,7 @@ def build_run_config(
     metadata: dict[str, Any] | None,
     *,
     assistant_id: str | None = None,
+    user_id: str | None = None,
 ) -> dict[str, Any]:
     """Build a RunnableConfig dict for the agent.
 
@@ -130,6 +132,8 @@ def build_run_config(
     identically.
     """
     configurable: dict[str, Any] = {"thread_id": thread_id}
+    if user_id:
+        configurable["user_id"] = user_id
     if request_config:
         configurable.update(request_config.get("configurable", {}))
 
@@ -173,6 +177,29 @@ async def _upsert_thread_in_store(store, thread_id: str, metadata: dict | None) 
         await _store_upsert(store, thread_id, metadata=metadata)
     except Exception:
         logger.warning("Failed to upsert thread %s in store (non-fatal)", thread_id)
+
+
+async def _upsert_thread_in_business_store(
+    business_store,
+    *,
+    thread_id: str,
+    user_id: str,
+    title: str | None = None,
+    source: str = "web",
+    source_user_id: str | None = None,
+) -> None:
+    """Create or refresh the thread ownership record in the business store."""
+
+    try:
+        await business_store.create_thread(
+            thread_id,
+            user_id=user_id,
+            title=title,
+            source=source,
+            source_user_id=source_user_id,
+        )
+    except Exception:
+        logger.warning("Failed to upsert thread %s in business store (non-fatal)", thread_id, exc_info=True)
 
 
 async def _sync_thread_title_after_run(
@@ -245,6 +272,8 @@ async def start_run(
     run_mgr = get_run_manager(request)
     checkpointer = get_checkpointer(request)
     store = get_store(request)
+    business_store = get_business_store(request)
+    current_user = get_optional_current_user(request)
 
     disconnect = DisconnectMode.cancel if body.on_disconnect == "cancel" else DisconnectMode.continue_
 
@@ -268,9 +297,24 @@ async def start_run(
     if store is not None:
         await _upsert_thread_in_store(store, thread_id, body.metadata)
 
+    if business_store is not None and current_user is not None:
+        await _upsert_thread_in_business_store(
+            business_store,
+            thread_id=thread_id,
+            user_id=current_user.id,
+            title=(body.metadata or {}).get("title"),
+            source="web",
+        )
+
     agent_factory = resolve_agent_factory(body.assistant_id)
     graph_input = normalize_input(body.input)
-    config = build_run_config(thread_id, body.config, body.metadata, assistant_id=body.assistant_id)
+    config = build_run_config(
+        thread_id,
+        body.config,
+        body.metadata,
+        assistant_id=body.assistant_id,
+        user_id=current_user.id if current_user is not None else None,
+    )
     stream_modes = normalize_stream_modes(body.stream_mode)
 
     task = asyncio.create_task(

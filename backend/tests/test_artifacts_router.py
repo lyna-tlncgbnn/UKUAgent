@@ -17,8 +17,27 @@ ACTIVE_ARTIFACT_CASES = [
 ]
 
 
-def _make_request(query_string: bytes = b"") -> Request:
-    return Request({"type": "http", "method": "GET", "path": "/", "headers": [], "query_string": query_string})
+class FakeBusinessStore:
+    def __init__(self, thread_owner_map=None):
+        self.thread_owner_map = thread_owner_map or {}
+
+    async def get_thread(self, thread_id: str):
+        user_id = self.thread_owner_map.get(thread_id)
+        if user_id is None:
+            return None
+        return type("ThreadRecord", (), {"id": thread_id, "user_id": user_id})()
+
+
+def _make_request(
+    query_string: bytes = b"",
+    *,
+    user_id: str = "user-1",
+    business_store=None,
+) -> Request:
+    app = type("App", (), {"state": type("AppState", (), {"business_store": business_store or FakeBusinessStore({"thread-1": user_id})})()})()
+    request = Request({"type": "http", "method": "GET", "path": "/", "headers": [], "query_string": query_string, "app": app, "state": {}})
+    request.state.current_user = type("User", (), {"id": user_id})()
+    return request
 
 
 def test_get_artifact_reads_utf8_text_file_on_windows_locale(tmp_path, monkeypatch) -> None:
@@ -102,3 +121,25 @@ def test_get_artifact_download_true_forces_attachment_for_skill_archive(tmp_path
     assert response.status_code == 200
     assert response.text == "hello"
     assert response.headers.get("content-disposition", "").startswith("attachment;")
+
+
+def test_get_artifact_route_rejects_non_owner(tmp_path, monkeypatch) -> None:
+    artifact_path = tmp_path / "note.txt"
+    artifact_path.write_text("hello", encoding="utf-8")
+
+    monkeypatch.setattr(artifacts_router, "resolve_thread_virtual_path", lambda _thread_id, _path: artifact_path)
+
+    app = FastAPI()
+
+    @app.middleware("http")
+    async def inject_user(request, call_next):
+        request.state.current_user = type("User", (), {"id": "user-1"})()
+        return await call_next(request)
+
+    app.state.business_store = FakeBusinessStore({"thread-1": "other-user"})
+    app.include_router(artifacts_router.router)
+
+    with TestClient(app) as client:
+        response = client.get("/api/threads/thread-1/artifacts/mnt/user-data/outputs/note.txt")
+
+    assert response.status_code == 404

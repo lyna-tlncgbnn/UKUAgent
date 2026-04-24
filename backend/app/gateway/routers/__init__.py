@@ -1,3 +1,24 @@
-from . import artifacts, assistants_compat, mcp, models, skills, suggestions, thread_runs, threads, uploads
+__all__ = [
+    "agents",
+    "artifacts",
+    "assistants_compat",
+    "channels",
+    "mcp",
+    "memory",
+    "models",
+    "runs",
+    "skills",
+    "suggestions",
+    "thread_runs",
+    "threads",
+    "uploads",
+]
 
-__all__ = ["artifacts", "assistants_compat", "mcp", "models", "skills", "suggestions", "threads", "thread_runs", "uploads"]
+
+def __getattr__(name: str):
+    if name not in __all__:
+        raise AttributeError(name)
+
+    import importlib
+
+    return importlib.import_module(f"{__name__}.{name}")

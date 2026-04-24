@@ -1,9 +1,10 @@
 import json
 import logging
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Request
 from pydantic import BaseModel, Field
 
+from app.gateway.auth import require_owned_thread
 from deerflow.models import create_chat_model
 
 logger = logging.getLogger(__name__)
@@ -91,18 +92,12 @@ def _format_conversation(messages: list[SuggestionMessage]) -> str:
     return "\n".join(parts).strip()
 
 
-@router.post(
-    "/threads/{thread_id}/suggestions",
-    response_model=SuggestionsResponse,
-    summary="Generate Follow-up Questions",
-    description="Generate short follow-up questions a user might ask next, based on recent conversation context.",
-)
-async def generate_suggestions(thread_id: str, request: SuggestionsRequest) -> SuggestionsResponse:
-    if not request.messages:
+async def _generate_suggestions_response(thread_id: str, payload: SuggestionsRequest) -> SuggestionsResponse:
+    if not payload.messages:
         return SuggestionsResponse(suggestions=[])
 
-    n = request.n
-    conversation = _format_conversation(request.messages)
+    n = payload.n
+    conversation = _format_conversation(payload.messages)
     if not conversation:
         return SuggestionsResponse(suggestions=[])
 
@@ -120,7 +115,7 @@ async def generate_suggestions(thread_id: str, request: SuggestionsRequest) -> S
     )
 
     try:
-        model = create_chat_model(name=request.model_name, thinking_enabled=False)
+        model = create_chat_model(name=payload.model_name, thinking_enabled=False)
         response = model.invoke(prompt)
         raw = _extract_response_text(response.content)
         suggestions = _parse_json_string_list(raw) or []
@@ -130,3 +125,14 @@ async def generate_suggestions(thread_id: str, request: SuggestionsRequest) -> S
     except Exception as exc:
         logger.exception("Failed to generate suggestions: thread_id=%s err=%s", thread_id, exc)
         return SuggestionsResponse(suggestions=[])
+
+
+@router.post(
+    "/threads/{thread_id}/suggestions",
+    response_model=SuggestionsResponse,
+    summary="Generate Follow-up Questions",
+    description="Generate short follow-up questions a user might ask next, based on recent conversation context.",
+)
+async def generate_suggestions(thread_id: str, payload: SuggestionsRequest, request: Request) -> SuggestionsResponse:
+    await require_owned_thread(request, thread_id)
+    return await _generate_suggestions_response(thread_id, payload)

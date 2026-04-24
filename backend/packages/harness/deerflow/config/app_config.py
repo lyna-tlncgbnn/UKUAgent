@@ -8,6 +8,7 @@ from dotenv import load_dotenv
 from pydantic import BaseModel, ConfigDict, Field
 
 from deerflow.config.acp_config import load_acp_config_from_dict
+from deerflow.config.business_storage_config import BusinessStorageConfig
 from deerflow.config.checkpointer_config import CheckpointerConfig, load_checkpointer_config_from_dict
 from deerflow.config.extensions_config import ExtensionsConfig
 from deerflow.config.guardrails_config import load_guardrails_config_from_dict
@@ -42,6 +43,10 @@ class AppConfig(BaseModel):
     tool_search: ToolSearchConfig = Field(default_factory=ToolSearchConfig, description="Tool search / deferred loading configuration")
     model_config = ConfigDict(extra="allow", frozen=False)
     checkpointer: CheckpointerConfig | None = Field(default=None, description="Checkpointer configuration")
+    business_storage: BusinessStorageConfig = Field(
+        default_factory=BusinessStorageConfig,
+        description="Business metadata storage configuration for multi-user deployments",
+    )
     stream_bridge: StreamBridgeConfig | None = Field(default=None, description="Stream bridge configuration")
 
     @classmethod

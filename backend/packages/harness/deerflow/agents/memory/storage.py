@@ -8,6 +8,11 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
+
+from app.persistence.models import UserMemoryRecord
+from deerflow.config.app_config import get_app_config
 from deerflow.config.agents_config import AGENT_NAME_PATTERN
 from deerflow.config.memory_config import get_memory_config
 from deerflow.config.paths import get_paths
@@ -160,6 +165,126 @@ class FileMemoryStorage(MemoryStorage):
 
 _storage_instance: MemoryStorage | None = None
 _storage_lock = threading.Lock()
+_business_session_factory = None
+_business_session_lock = threading.Lock()
+
+
+def _build_sync_business_connection_string(connection_string: str) -> str:
+    """Convert async SQLAlchemy URLs into sync URLs for memory/profile access."""
+
+    if connection_string.startswith("sqlite+aiosqlite:"):
+        return connection_string.replace("sqlite+aiosqlite:", "sqlite:", 1)
+    if connection_string.startswith("postgresql+asyncpg:"):
+        return connection_string.replace("postgresql+asyncpg:", "postgresql+psycopg:", 1)
+    return connection_string
+
+
+def _get_business_session_factory():
+    """Create a synchronous session factory for business user-memory access."""
+
+    global _business_session_factory
+    if _business_session_factory is not None:
+        return _business_session_factory
+
+    with _business_session_lock:
+        if _business_session_factory is not None:
+            return _business_session_factory
+
+        config = get_app_config().business_storage
+        if not config.enabled:
+            return None
+
+        engine = create_engine(_build_sync_business_connection_string(config.connection_string), echo=config.echo)
+        _business_session_factory = sessionmaker(bind=engine, expire_on_commit=False)
+        return _business_session_factory
+
+
+def load_user_memory_from_business_store(user_id: str) -> dict[str, Any]:
+    """Load per-user memory from the business store, falling back to an empty structure."""
+
+    session_factory = _get_business_session_factory()
+    if session_factory is None:
+        return get_memory_storage().load(None)
+
+    with session_factory() as session:
+        record = session.get(UserMemoryRecord, user_id)
+        if record is None or not isinstance(record.memory_json, dict):
+            return create_empty_memory()
+        return dict(record.memory_json)
+
+
+def save_user_memory_to_business_store(user_id: str, memory_data: dict[str, Any]) -> bool:
+    """Persist per-user memory into the business store."""
+
+    session_factory = _get_business_session_factory()
+    if session_factory is None:
+        return get_memory_storage().save(memory_data, None)
+
+    try:
+        normalized = dict(memory_data)
+        normalized["lastUpdated"] = datetime.utcnow().isoformat() + "Z"
+        with session_factory() as session:
+            record = session.get(UserMemoryRecord, user_id)
+            if record is None:
+                record = UserMemoryRecord(user_id=user_id, memory_json=normalized, user_profile_md="")
+                session.add(record)
+            else:
+                record.memory_json = normalized
+            session.commit()
+        return True
+    except Exception as e:
+        logger.error("Failed to save user memory to business store: %s", e)
+        return False
+
+
+def load_user_profile_from_business_store(user_id: str) -> str:
+    """Load per-user profile markdown from the business store."""
+
+    session_factory = _get_business_session_factory()
+    if session_factory is None:
+        profile_path = get_paths().user_md_file
+        if not profile_path.exists():
+            return ""
+        return profile_path.read_text(encoding="utf-8")
+
+    with session_factory() as session:
+        record = session.get(UserMemoryRecord, user_id)
+        if record is None:
+            return ""
+        return record.user_profile_md or ""
+
+
+def save_user_profile_to_business_store(user_id: str, profile_markdown: str) -> bool:
+    """Persist per-user profile markdown into the business store."""
+
+    session_factory = _get_business_session_factory()
+    if session_factory is None:
+        try:
+            profile_path = get_paths().user_md_file
+            profile_path.parent.mkdir(parents=True, exist_ok=True)
+            profile_path.write_text(profile_markdown, encoding="utf-8")
+            return True
+        except Exception as e:
+            logger.error("Failed to save user profile to fallback file store: %s", e)
+            return False
+
+    try:
+        with session_factory() as session:
+            record = session.get(UserMemoryRecord, user_id)
+            if record is None:
+                record = UserMemoryRecord(
+                    user_id=user_id,
+                    memory_json=create_empty_memory(),
+                    user_profile_md=profile_markdown,
+                )
+                session.add(record)
+            else:
+                record.user_profile_md = profile_markdown
+            session.commit()
+        return True
+    except Exception as e:
+        logger.error("Failed to save user profile to business store: %s", e)
+        return False
 
 
 def get_memory_storage() -> MemoryStorage:

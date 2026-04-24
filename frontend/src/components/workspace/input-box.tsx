@@ -317,7 +317,7 @@ export function InputBox({
       return;
     }
 
-    if (disabled || isMock) {
+    if (disabled || isMock || !threadId || threadId === "new") {
       return;
     }
 

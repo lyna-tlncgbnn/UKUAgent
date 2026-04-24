@@ -2,10 +2,11 @@ import logging
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 
 from app.gateway.config import get_gateway_config
 from app.gateway.deps import langgraph_runtime
+from app.gateway.auth import resolve_authenticated_user
 from app.gateway.routers import (
     agents,
     artifacts,
@@ -164,6 +165,16 @@ This gateway provides custom endpoints for models, MCP configuration, skills, an
     )
 
     # CORS is handled by nginx - no need for FastAPI middleware
+
+    @app.middleware("http")
+    async def attach_current_user(request: Request, call_next):
+        config = get_gateway_config()
+        request.state.current_user = await resolve_authenticated_user(
+            request,
+            expected_proxy_secret=config.auth_proxy_secret,
+            business_store=getattr(request.app.state, "business_store", None),
+        )
+        return await call_next(request)
 
     # Include routers
     # Models API is mounted at /api/models

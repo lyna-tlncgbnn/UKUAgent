@@ -63,7 +63,11 @@ export function RecentChatList() {
   const router = useRouter();
   const pathname = usePathname();
   const { thread_id: threadIdFromPath } = useParams<{ thread_id: string }>();
-  const { data: threads = [] } = useThreads();
+  const {
+    data: threads = [],
+    error,
+    isLoading,
+  } = useThreads();
   const { mutate: deleteThread } = useDeleteThread();
   const { mutate: renameThread } = useRenameThread();
 
@@ -154,8 +158,41 @@ export function RecentChatList() {
     [t],
   );
 
+  if (isLoading) {
+    return (
+      <SidebarGroup>
+        <SidebarGroupLabel>{t.sidebar.recentChats}</SidebarGroupLabel>
+        <SidebarGroupContent className="px-2 text-sm text-muted-foreground">
+          {t.common.loading}
+        </SidebarGroupContent>
+      </SidebarGroup>
+    );
+  }
+
+  if (error) {
+    const message =
+      error instanceof Error && error.message.includes("Authentication required")
+        ? t.sidebar.recentChatsUnauthenticated
+        : t.sidebar.recentChatsLoadError;
+    return (
+      <SidebarGroup>
+        <SidebarGroupLabel>{t.sidebar.recentChats}</SidebarGroupLabel>
+        <SidebarGroupContent className="px-2 text-sm text-muted-foreground">
+          {message}
+        </SidebarGroupContent>
+      </SidebarGroup>
+    );
+  }
+
   if (threads.length === 0) {
-    return null;
+    return (
+      <SidebarGroup>
+        <SidebarGroupLabel>{t.sidebar.recentChats}</SidebarGroupLabel>
+        <SidebarGroupContent className="px-2 text-sm text-muted-foreground">
+          {t.sidebar.recentChatsEmpty}
+        </SidebarGroupContent>
+      </SidebarGroup>
+    );
   }
   return (
     <>

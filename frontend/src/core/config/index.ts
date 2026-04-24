@@ -14,7 +14,7 @@ export function getBackendBaseURL() {
       .toString()
       .replace(/\/+$/, "");
   } else {
-    return "";
+    return "/api/backend";
   }
 }
 

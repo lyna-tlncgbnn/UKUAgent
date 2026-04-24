@@ -10,10 +10,12 @@ from __future__ import annotations
 
 from collections.abc import AsyncGenerator
 from contextlib import AsyncExitStack, asynccontextmanager
+from typing import TYPE_CHECKING, Any
 
 from fastapi import FastAPI, HTTPException, Request
 
-from deerflow.runtime import RunManager, StreamBridge
+if TYPE_CHECKING:
+    from deerflow.runtime import RunManager, StreamBridge
 
 
 @asynccontextmanager
@@ -26,12 +28,14 @@ async def langgraph_runtime(app: FastAPI) -> AsyncGenerator[None, None]:
             yield
     """
     from deerflow.agents.checkpointer.async_provider import make_checkpointer
-    from deerflow.runtime import make_store, make_stream_bridge
+    from deerflow.runtime import RunManager, make_store, make_stream_bridge
+    from app.persistence import create_business_store
 
     async with AsyncExitStack() as stack:
         app.state.stream_bridge = await stack.enter_async_context(make_stream_bridge())
         app.state.checkpointer = await stack.enter_async_context(make_checkpointer())
         app.state.store = await stack.enter_async_context(make_store())
+        app.state.business_store = await stack.enter_async_context(create_business_store())
         app.state.run_manager = RunManager()
         yield
 
@@ -41,7 +45,7 @@ async def langgraph_runtime(app: FastAPI) -> AsyncGenerator[None, None]:
 # ---------------------------------------------------------------------------
 
 
-def get_stream_bridge(request: Request) -> StreamBridge:
+def get_stream_bridge(request: Request) -> Any:
     """Return the global :class:`StreamBridge`, or 503."""
     bridge = getattr(request.app.state, "stream_bridge", None)
     if bridge is None:
@@ -49,7 +53,7 @@ def get_stream_bridge(request: Request) -> StreamBridge:
     return bridge
 
 
-def get_run_manager(request: Request) -> RunManager:
+def get_run_manager(request: Request) -> Any:
     """Return the global :class:`RunManager`, or 503."""
     mgr = getattr(request.app.state, "run_manager", None)
     if mgr is None:
@@ -68,3 +72,8 @@ def get_checkpointer(request: Request):
 def get_store(request: Request):
     """Return the global store (may be ``None`` if not configured)."""
     return getattr(request.app.state, "store", None)
+
+
+def get_business_store(request: Request):
+    """Return the business metadata store (may be ``None`` if not configured)."""
+    return getattr(request.app.state, "business_store", None)

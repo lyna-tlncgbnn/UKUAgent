@@ -3,10 +3,15 @@
 import logging
 import os
 import stat
+import uuid
+from pathlib import Path
 
-from fastapi import APIRouter, File, HTTPException, UploadFile
+from fastapi import APIRouter, File, HTTPException, Request, UploadFile
 from pydantic import BaseModel
 
+from app.gateway.auth import get_optional_current_user, require_owned_thread
+from app.gateway.deps import get_business_store
+from app.persistence import ThreadFileKind
 from deerflow.config.paths import get_paths
 from deerflow.sandbox.sandbox_provider import get_sandbox_provider
 from deerflow.uploads.manager import (
@@ -56,11 +61,19 @@ def _make_file_sandbox_writable(file_path: os.PathLike[str] | str) -> None:
 @router.post("", response_model=UploadResponse)
 async def upload_files(
     thread_id: str,
+    request: Request = None,
     files: list[UploadFile] = File(...),
 ) -> UploadResponse:
     """Upload multiple files to a thread's uploads directory."""
     if not files:
         raise HTTPException(status_code=400, detail="No files provided")
+
+    business_store = None
+    current_user = None
+    if request is not None:
+        await require_owned_thread(request, thread_id)
+        business_store = get_business_store(request)
+        current_user = get_optional_current_user(request)
 
     try:
         uploads_dir = ensure_uploads_dir(thread_id)
@@ -104,6 +117,18 @@ async def upload_files(
 
             logger.info(f"Saved file: {safe_filename} ({len(content)} bytes) to {file_info['path']}")
 
+            if business_store is not None and current_user is not None:
+                await business_store.record_thread_file(
+                    str(uuid.uuid4()),
+                    thread_id=thread_id,
+                    user_id=current_user.id,
+                    kind=ThreadFileKind.UPLOAD,
+                    filename=safe_filename,
+                    storage_path=str(sandbox_uploads / safe_filename),
+                    mime_type=file.content_type,
+                    size_bytes=len(content),
+                )
+
             file_ext = file_path.suffix.lower()
             if file_ext in CONVERTIBLE_EXTENSIONS:
                 md_path = await convert_file_to_markdown(file_path)
@@ -119,6 +144,19 @@ async def upload_files(
                     file_info["markdown_virtual_path"] = md_virtual_path
                     file_info["markdown_artifact_url"] = upload_artifact_url(thread_id, md_path.name)
 
+                    if business_store is not None and current_user is not None:
+                        markdown_bytes = md_path.read_bytes()
+                        await business_store.record_thread_file(
+                            str(uuid.uuid4()),
+                            thread_id=thread_id,
+                            user_id=current_user.id,
+                            kind=ThreadFileKind.ARTIFACT,
+                            filename=md_path.name,
+                            storage_path=str(sandbox_uploads / md_path.name),
+                            mime_type="text/markdown",
+                            size_bytes=len(markdown_bytes),
+                        )
+
             uploaded_files.append(file_info)
 
         except Exception as e:
@@ -133,8 +171,10 @@ async def upload_files(
 
 
 @router.get("/list", response_model=dict)
-async def list_uploaded_files(thread_id: str) -> dict:
+async def list_uploaded_files(thread_id: str, request: Request = None) -> dict:
     """List all files in a thread's uploads directory."""
+    if request is not None:
+        await require_owned_thread(request, thread_id)
     try:
         uploads_dir = get_uploads_dir(thread_id)
     except ValueError as e:
@@ -151,14 +191,28 @@ async def list_uploaded_files(thread_id: str) -> dict:
 
 
 @router.delete("/{filename}")
-async def delete_uploaded_file(thread_id: str, filename: str) -> dict:
+async def delete_uploaded_file(thread_id: str, filename: str, request: Request = None) -> dict:
     """Delete a file from a thread's uploads directory."""
+    business_store = None
+    if request is not None:
+        await require_owned_thread(request, thread_id)
+        business_store = get_business_store(request)
+
     try:
         uploads_dir = get_uploads_dir(thread_id)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     try:
-        return delete_file_safe(uploads_dir, filename, convertible_extensions=CONVERTIBLE_EXTENSIONS)
+        result = delete_file_safe(uploads_dir, filename, convertible_extensions=CONVERTIBLE_EXTENSIONS)
+        if business_store is not None:
+            sandbox_uploads = get_paths().sandbox_uploads_dir(thread_id)
+            deleted_paths = [
+                str(sandbox_uploads / filename),
+                str(sandbox_uploads / Path(filename).with_suffix(".md").name),
+            ]
+            for storage_path in deleted_paths:
+                await business_store.delete_thread_file_by_path(thread_id=thread_id, storage_path=storage_path)
+        return result
     except FileNotFoundError:
         raise HTTPException(status_code=404, detail=f"File not found: {filename}")
     except PathTraversalError:

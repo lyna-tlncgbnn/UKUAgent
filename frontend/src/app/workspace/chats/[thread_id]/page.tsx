@@ -29,7 +29,8 @@ export default function ChatPage() {
   const { t } = useI18n();
   const [settings, setSettings] = useLocalSettings();
 
-  const { threadId, isNewThread, setIsNewThread, isMock } = useThreadChat();
+  const { threadId, setThreadId, isNewThread, setIsNewThread, isMock } =
+    useThreadChat();
   useSpecificChatMode();
 
   const { showNotification } = useNotification();
@@ -38,10 +39,11 @@ export default function ChatPage() {
     threadId: isNewThread ? undefined : threadId,
     context: settings.context,
     isMock,
-    onStart: () => {
+    onStart: (startedThreadId) => {
+      setThreadId(startedThreadId);
       setIsNewThread(false);
       // ! Important: Never use next.js router for navigation in this case, otherwise it will cause the thread to re-mount and lose all states. Use native history API instead.
-      history.replaceState(null, "", `/workspace/chats/${threadId}`);
+      history.replaceState(null, "", `/workspace/chats/${startedThreadId}`);
     },
     onFinish: (state) => {
       if (document.hidden || !document.hasFocus()) {
@@ -63,9 +65,9 @@ export default function ChatPage() {
 
   const handleSubmit = useCallback(
     (message: PromptInputMessage) => {
-      void sendMessage(threadId, message);
+      void sendMessage(isNewThread ? "" : threadId, message);
     },
-    [sendMessage, threadId],
+    [isNewThread, sendMessage, threadId],
   );
   const handleStop = useCallback(async () => {
     await thread.stop();

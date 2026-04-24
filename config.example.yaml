@@ -585,6 +585,23 @@ checkpointer:
 #   connection_string: postgresql://user:password@localhost:5432/deerflow
 
 # ============================================================================
+# Business Storage Configuration
+# ============================================================================
+# Stores multi-user business metadata such as thread ownership, user memory,
+# custom agents, and MCP access rules. This is separate from the LangGraph
+# checkpointer/store state used for runnable thread execution.
+#
+# Supported SQLAlchemy async drivers:
+#   sqlite+aiosqlite:///./.deer-flow/business.db
+#   postgresql+psycopg://user:password@localhost:5432/deerflow
+#
+business_storage:
+  enabled: true
+  connection_string: sqlite+aiosqlite:///./.deer-flow/business.db
+  auto_create_tables: true
+  echo: false
+
+# ============================================================================
 # IM Channels Configuration
 # ============================================================================
 # Connect DeerFlow to external messaging platforms.

@@ -16,6 +16,7 @@ import { useUpdateSubtask } from "../tasks/context";
 import type { UploadedFileInfo } from "../uploads";
 import { uploadFiles } from "../uploads";
 
+import { createThread, searchThreads } from "./api";
 import type { AgentThread, AgentThreadState } from "./types";
 
 export type ToolEndEvent = {
@@ -119,6 +120,12 @@ export function useThreadStream({
     onCreated(meta) {
       handleStreamStart(meta.thread_id);
       setOnStreamThreadId(meta.thread_id);
+      // Sync thread to Gateway for ownership / business metadata.
+      // Gateway's createThread is idempotent — safe to call even if the
+      // thread was already registered (e.g. for file-upload scenarios).
+      void createThread({ thread_id: meta.thread_id }).then(() => {
+        queryClient.invalidateQueries({ queryKey: ["threads", "search"] });
+      });
     },
     onLangChainEvent(event) {
       if (event.event === "on_tool_end") {
@@ -210,6 +217,22 @@ export function useThreadStream({
       }
       sendInFlightRef.current = true;
 
+      let activeThreadId = threadId === "new" ? "" : threadId;
+      const isCreatingNewThread = !activeThreadId;
+
+      // For new threads with file attachments we still need a Gateway-side
+      // thread so the upload endpoint has somewhere to store the files.
+      // We intentionally do NOT call setOnStreamThreadId here — that would
+      // cause useStream to fetchStateHistory from LangGraph Server before
+      // it knows about this thread, producing a harmless-but-noisy 404.
+      // The thread will be synced to Gateway via the onCreated callback
+      // once LangGraph Server creates it during submit().
+      if (isCreatingNewThread && message.files && message.files.length > 0) {
+        const createdThread = await createThread();
+        activeThreadId = createdThread.thread_id;
+        threadIdRef.current = activeThreadId;
+      }
+
       const text = message.text.trim();
 
       // Capture current count before showing optimistic messages
@@ -245,7 +268,7 @@ export function useThreadStream({
       }
       setOptimisticMessages(newOptimistic);
 
-      _handleOnStart(threadId);
+      _handleOnStart(activeThreadId);
 
       let uploadedFileInfo: UploadedFileInfo[] = [];
 
@@ -289,12 +312,12 @@ export function useThreadStream({
               );
             }
 
-            if (!threadId) {
+            if (!activeThreadId) {
               throw new Error("Thread is not ready for file upload.");
             }
 
             if (files.length > 0) {
-              const uploadResponse = await uploadFiles(threadId, files);
+              const uploadResponse = await uploadFiles(activeThreadId, files);
               uploadedFileInfo = uploadResponse.files;
 
               // Update optimistic human message with uploaded status + paths
@@ -361,7 +384,10 @@ export function useThreadStream({
             ],
           },
           {
-            threadId: threadId,
+            // For new threads without files, pass undefined so useStream
+            // auto-creates the thread on LangGraph Server (triggers onCreated).
+            // For new threads with files activeThreadId was set above.
+            threadId: activeThreadId || undefined,
             streamSubgraphs: true,
             streamResumable: true,
             config: {
@@ -382,7 +408,7 @@ export function useThreadStream({
                     : context.mode === "thinking"
                       ? "low"
                       : undefined),
-              thread_id: threadId,
+              thread_id: activeThreadId || undefined,
             },
           },
         );
@@ -418,60 +444,15 @@ export function useThreads(
     select: ["thread_id", "updated_at", "values"],
   },
 ) {
-  const apiClient = getAPIClient();
   return useQuery<AgentThread[]>({
     queryKey: ["threads", "search", params],
     queryFn: async () => {
-      const maxResults = params.limit;
-      const initialOffset = params.offset ?? 0;
-      const DEFAULT_PAGE_SIZE = 50;
-
-      // Preserve prior semantics: if a non-positive limit is explicitly provided,
-      // delegate to a single search call with the original parameters.
-      if (maxResults !== undefined && maxResults <= 0) {
-        const response =
-          await apiClient.threads.search<AgentThreadState>(params);
-        return response as AgentThread[];
-      }
-
-      const pageSize =
-        typeof maxResults === "number" && maxResults > 0
-          ? Math.min(DEFAULT_PAGE_SIZE, maxResults)
-          : DEFAULT_PAGE_SIZE;
-
-      const threads: AgentThread[] = [];
-      let offset = initialOffset;
-
-      while (true) {
-        if (typeof maxResults === "number" && threads.length >= maxResults) {
-          break;
-        }
-
-        const currentLimit =
-          typeof maxResults === "number"
-            ? Math.min(pageSize, maxResults - threads.length)
-            : pageSize;
-
-        if (typeof maxResults === "number" && currentLimit <= 0) {
-          break;
-        }
-
-        const response = (await apiClient.threads.search<AgentThreadState>({
-          ...params,
-          limit: currentLimit,
-          offset,
-        })) as AgentThread[];
-
-        threads.push(...response);
-
-        if (response.length < currentLimit) {
-          break;
-        }
-
-        offset += response.length;
-      }
-
-      return threads;
+      return searchThreads({
+        metadata: params.metadata,
+        limit: params.limit,
+        offset: params.offset,
+        status: params.status,
+      });
     },
     refetchOnWindowFocus: false,
   });
@@ -520,7 +501,6 @@ export function useDeleteThread() {
 
 export function useRenameThread() {
   const queryClient = useQueryClient();
-  const apiClient = getAPIClient();
   return useMutation({
     mutationFn: async ({
       threadId,
@@ -529,9 +509,25 @@ export function useRenameThread() {
       threadId: string;
       title: string;
     }) => {
-      await apiClient.threads.updateState(threadId, {
-        values: { title },
-      });
+      const response = await fetch(
+        `${getBackendBaseURL()}/api/threads/${encodeURIComponent(threadId)}/state`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            values: { title },
+          }),
+        },
+      );
+      if (!response.ok) {
+        const error = await response
+          .json()
+          .catch(() => ({ detail: "Failed to rename thread." }));
+        throw new Error(error.detail ?? "Failed to rename thread.");
+      }
+      await response.json().catch(() => null);
     },
     onSuccess(_, { threadId, title }) {
       queryClient.setQueriesData(

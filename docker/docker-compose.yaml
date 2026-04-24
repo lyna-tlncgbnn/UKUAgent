@@ -50,10 +50,18 @@ services:
     container_name: deer-flow-frontend
     environment:
       - BETTER_AUTH_SECRET=${BETTER_AUTH_SECRET}
+      - DEER_FLOW_HOME=/app/.deer-flow
       - DEER_FLOW_INTERNAL_GATEWAY_BASE_URL=http://gateway:8001
       - DEER_FLOW_INTERNAL_LANGGRAPH_BASE_URL=http://langgraph:2024
+      - DEER_FLOW_AUTH_SEED_EMAIL=${DEER_FLOW_AUTH_SEED_EMAIL:-}
+      - DEER_FLOW_AUTH_SEED_PASSWORD=${DEER_FLOW_AUTH_SEED_PASSWORD:-}
+      - DEER_FLOW_AUTH_SEED_NAME=${DEER_FLOW_AUTH_SEED_NAME:-}
+      - DEER_FLOW_AUTH_SEED_ROLE=${DEER_FLOW_AUTH_SEED_ROLE:-member}
+      - DEER_FLOW_AUTH_SEED_USERS=${DEER_FLOW_AUTH_SEED_USERS:-}
     env_file:
       - ../frontend/.env
+    volumes:
+      - ${DEER_FLOW_HOME}:/app/.deer-flow
     networks:
       - deer-flow
     restart: unless-stopped

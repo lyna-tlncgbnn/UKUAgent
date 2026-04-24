@@ -358,6 +358,12 @@ def _make_test_app(tmp_path: Path):
     from app.gateway.routers.agents import router
 
     app = FastAPI()
+
+    @app.middleware("http")
+    async def inject_user(request, call_next):
+        request.state.current_user = type("User", (), {"id": "user-1"})()
+        return await call_next(request)
+
     app.include_router(router)
     return app
 

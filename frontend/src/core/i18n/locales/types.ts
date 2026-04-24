@@ -107,6 +107,9 @@ export interface Translations {
   // Sidebar
   sidebar: {
     recentChats: string;
+    recentChatsEmpty: string;
+    recentChatsUnauthenticated: string;
+    recentChatsLoadError: string;
     newChat: string;
     chats: string;
     demoChats: string;
@@ -232,11 +235,36 @@ export interface Translations {
     title: string;
     description: string;
     sections: {
+      account: string;
       appearance: string;
       memory: string;
       tools: string;
       skills: string;
       notification: string;
+    };
+    account: {
+      title: string;
+      description: string;
+      emailLabel: string;
+      roleLabel: string;
+      userIdLabel: string;
+      nameLabel: string;
+      namePlaceholder: string;
+      profileLabel: string;
+      profilePlaceholder: string;
+      saveSuccess: string;
+      saveError: string;
+      passwordTitle: string;
+      passwordDescription: string;
+      currentPasswordLabel: string;
+      newPasswordLabel: string;
+      changePasswordAction: string;
+      passwordChangeSuccess: string;
+      passwordChangeError: string;
+      sessionTitle: string;
+      sessionDescription: string;
+      logoutAction: string;
+      logoutError: string;
     };
     memory: {
       title: string;
@@ -350,5 +378,15 @@ export interface Translations {
       emptyTitle: string;
       emptyDescription: string;
     };
+  };
+
+  auth: {
+    loginTitle: string;
+    loginDescription: string;
+    emailLabel: string;
+    passwordLabel: string;
+    signIn: string;
+    signingIn: string;
+    invalidCredentials: string;
   };
 }

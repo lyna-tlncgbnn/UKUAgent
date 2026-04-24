@@ -4,9 +4,66 @@ from io import BytesIO
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
+from fastapi import FastAPI
 from fastapi import UploadFile
+from fastapi.testclient import TestClient
 
 from app.gateway.routers import uploads
+from app.persistence import ThreadFileKind
+
+
+class FakeBusinessStore:
+    def __init__(self, thread_owner_map=None):
+        self.thread_owner_map = thread_owner_map or {}
+        self.record_calls = []
+        self.delete_calls = []
+
+    async def get_thread(self, thread_id: str):
+        user_id = self.thread_owner_map.get(thread_id)
+        if user_id is None:
+            return None
+        return type("ThreadRecord", (), {"id": thread_id, "user_id": user_id})()
+
+    async def record_thread_file(
+        self,
+        file_id: str,
+        *,
+        thread_id: str,
+        user_id: str,
+        kind,
+        filename: str,
+        storage_path: str,
+        mime_type: str | None = None,
+        size_bytes: int | None = None,
+    ):
+        self.record_calls.append(
+            {
+                "file_id": file_id,
+                "thread_id": thread_id,
+                "user_id": user_id,
+                "kind": kind,
+                "filename": filename,
+                "storage_path": storage_path,
+                "mime_type": mime_type,
+                "size_bytes": size_bytes,
+            }
+        )
+
+    async def delete_thread_file_by_path(self, *, thread_id: str, storage_path: str):
+        self.delete_calls.append({"thread_id": thread_id, "storage_path": storage_path})
+        return 1
+
+
+def _build_uploads_app(*, user_id: str | None = None, business_store=None):
+    app = FastAPI()
+    if user_id is not None:
+        @app.middleware("http")
+        async def inject_user(request, call_next):
+            request.state.current_user = type("User", (), {"id": user_id})()
+            return await call_next(request)
+    app.state.business_store = business_store
+    app.include_router(uploads.router)
+    return app
 
 
 def test_upload_files_writes_thread_storage_and_skips_local_sandbox_sync(tmp_path):
@@ -193,3 +250,84 @@ def test_delete_uploaded_file_removes_generated_markdown_companion(tmp_path):
     assert result == {"success": True, "message": "Deleted report.pdf"}
     assert not (thread_uploads_dir / "report.pdf").exists()
     assert not (thread_uploads_dir / "report.md").exists()
+
+
+def test_upload_route_rejects_non_owner(tmp_path):
+    thread_uploads_dir = tmp_path / "uploads"
+    thread_uploads_dir.mkdir(parents=True)
+    provider = MagicMock()
+    provider.acquire.return_value = "local"
+    provider.get.return_value = MagicMock()
+
+    app = _build_uploads_app(
+        user_id="user-1",
+        business_store=FakeBusinessStore({"thread-a": "other-user"}),
+    )
+
+    with (
+        patch.object(uploads, "ensure_uploads_dir", return_value=thread_uploads_dir),
+        patch.object(uploads, "get_sandbox_provider", return_value=provider),
+    ):
+        with TestClient(app) as client:
+            response = client.post(
+                "/api/threads/thread-a/uploads",
+                files=[("files", ("notes.txt", b"hello uploads", "text/plain"))],
+            )
+
+    assert response.status_code == 404
+
+
+def test_upload_route_records_business_metadata(tmp_path):
+    thread_uploads_dir = tmp_path / "uploads"
+    thread_uploads_dir.mkdir(parents=True)
+
+    provider = MagicMock()
+    provider.acquire.return_value = "local"
+    provider.get.return_value = MagicMock()
+    business_store = FakeBusinessStore({"thread-a": "user-1"})
+
+    app = _build_uploads_app(user_id="user-1", business_store=business_store)
+
+    with (
+        patch.object(uploads, "ensure_uploads_dir", return_value=thread_uploads_dir),
+        patch.object(uploads, "get_sandbox_provider", return_value=provider),
+    ):
+        with TestClient(app) as client:
+            response = client.post(
+                "/api/threads/thread-a/uploads",
+                files=[("files", ("notes.txt", b"hello uploads", "text/plain"))],
+            )
+
+    assert response.status_code == 200
+    assert len(business_store.record_calls) == 1
+    assert business_store.record_calls[0]["thread_id"] == "thread-a"
+    assert business_store.record_calls[0]["user_id"] == "user-1"
+    assert business_store.record_calls[0]["filename"] == "notes.txt"
+    assert business_store.record_calls[0]["kind"] == ThreadFileKind.UPLOAD
+
+
+def test_delete_upload_route_removes_business_metadata(tmp_path):
+    thread_uploads_dir = tmp_path / "uploads"
+    thread_uploads_dir.mkdir(parents=True)
+    business_store = FakeBusinessStore({"thread-a": "user-1"})
+
+    app = _build_uploads_app(user_id="user-1", business_store=business_store)
+
+    with (
+        patch.object(uploads, "get_uploads_dir", return_value=thread_uploads_dir),
+        patch.object(uploads, "delete_file_safe", return_value={"success": True, "message": "Deleted report.pdf"}),
+    ):
+        with TestClient(app) as client:
+            response = client.delete("/api/threads/thread-a/uploads/report.pdf")
+
+    assert response.status_code == 200
+    assert business_store.delete_calls == [
+        {
+            "thread_id": "thread-a",
+            "storage_path": str(uploads.get_paths().sandbox_uploads_dir("thread-a") / "report.pdf"),
+        },
+        {
+            "thread_id": "thread-a",
+            "storage_path": str(uploads.get_paths().sandbox_uploads_dir("thread-a") / "report.md"),
+        },
+    ]

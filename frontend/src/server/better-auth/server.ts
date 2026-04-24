@@ -1,8 +1,10 @@
-import { headers } from "next/headers";
-import { cache } from "react";
+import { cookies } from "next/headers";
 
-import { auth } from ".";
+import { AUTH_SESSION_COOKIE_NAME } from "./shared";
+import { getSessionFromToken } from "./config";
 
-export const getSession = cache(async () =>
-  auth.api.getSession({ headers: await headers() }),
-);
+export async function getSession() {
+  const cookieStore = await cookies();
+  const token = cookieStore.get(AUTH_SESSION_COOKIE_NAME)?.value;
+  return getSessionFromToken(token);
+}

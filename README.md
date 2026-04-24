@@ -575,6 +575,9 @@ All dict-returning methods are validated against Gateway Pydantic response model
 - [Configuration Guide](backend/docs/CONFIGURATION.md) - Setup and configuration instructions
 - [Architecture Overview](backend/CLAUDE.md) - Technical architecture details
 - [Backend Architecture](backend/README.md) - Backend architecture and API reference
+- [Project Status](PROJECT_STATUS.md) - Current progress of the multi-user server upgrade in this fork
+- [Project Status (Chinese)](PROJECT_STATUS_zh.md) - Chinese summary of the current multi-user server upgrade progress
+- [Multi-User Server Upgrade Index](docs/multi-user-server/README.md) - Step-by-step implementation status and next work items
 
 ## ⚠️ Security Notice
 

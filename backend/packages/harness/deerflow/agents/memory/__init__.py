@@ -28,8 +28,10 @@ from deerflow.agents.memory.updater import (
     clear_memory_data,
     delete_memory_fact,
     get_memory_data,
+    get_user_profile_markdown,
     reload_memory_data,
     update_memory_from_conversation,
+    update_user_profile_markdown,
 )
 
 __all__ = [
@@ -52,6 +54,8 @@ __all__ = [
     "clear_memory_data",
     "delete_memory_fact",
     "get_memory_data",
+    "get_user_profile_markdown",
     "reload_memory_data",
     "update_memory_from_conversation",
+    "update_user_profile_markdown",
 ]

@@ -1,39 +1,40 @@
-"""LangGraph-compatible runtime — runs, streaming, and lifecycle management.
+"""LangGraph-compatible runtime exports with lazy loading."""
 
-Re-exports the public API of :mod:`~deerflow.runtime.runs` and
-:mod:`~deerflow.runtime.stream_bridge` so that consumers can import
-directly from ``deerflow.runtime``.
-"""
+from __future__ import annotations
 
-from .runs import ConflictError, DisconnectMode, RunManager, RunRecord, RunStatus, UnsupportedStrategyError, run_agent
-from .serialization import serialize, serialize_channel_values, serialize_lc_object, serialize_messages_tuple
-from .store import get_store, make_store, reset_store, store_context
-from .stream_bridge import END_SENTINEL, HEARTBEAT_SENTINEL, MemoryStreamBridge, StreamBridge, StreamEvent, make_stream_bridge
+from importlib import import_module
 
-__all__ = [
-    # runs
-    "ConflictError",
-    "DisconnectMode",
-    "RunManager",
-    "RunRecord",
-    "RunStatus",
-    "UnsupportedStrategyError",
-    "run_agent",
-    # serialization
-    "serialize",
-    "serialize_channel_values",
-    "serialize_lc_object",
-    "serialize_messages_tuple",
-    # store
-    "get_store",
-    "make_store",
-    "reset_store",
-    "store_context",
-    # stream_bridge
-    "END_SENTINEL",
-    "HEARTBEAT_SENTINEL",
-    "MemoryStreamBridge",
-    "StreamBridge",
-    "StreamEvent",
-    "make_stream_bridge",
-]
+_EXPORTS = {
+    "ConflictError": "deerflow.runtime.runs",
+    "DisconnectMode": "deerflow.runtime.runs",
+    "RunManager": "deerflow.runtime.runs",
+    "RunRecord": "deerflow.runtime.runs",
+    "RunStatus": "deerflow.runtime.runs",
+    "UnsupportedStrategyError": "deerflow.runtime.runs",
+    "run_agent": "deerflow.runtime.runs",
+    "serialize": "deerflow.runtime.serialization",
+    "serialize_channel_values": "deerflow.runtime.serialization",
+    "serialize_lc_object": "deerflow.runtime.serialization",
+    "serialize_messages_tuple": "deerflow.runtime.serialization",
+    "get_store": "deerflow.runtime.store",
+    "make_store": "deerflow.runtime.store",
+    "reset_store": "deerflow.runtime.store",
+    "store_context": "deerflow.runtime.store",
+    "END_SENTINEL": "deerflow.runtime.stream_bridge",
+    "HEARTBEAT_SENTINEL": "deerflow.runtime.stream_bridge",
+    "MemoryStreamBridge": "deerflow.runtime.stream_bridge",
+    "StreamBridge": "deerflow.runtime.stream_bridge",
+    "StreamEvent": "deerflow.runtime.stream_bridge",
+    "make_stream_bridge": "deerflow.runtime.stream_bridge",
+}
+
+__all__ = list(_EXPORTS)
+
+
+def __getattr__(name: str):
+    module_name = _EXPORTS.get(name)
+    if module_name is None:
+        raise AttributeError(name)
+
+    module = import_module(module_name)
+    return getattr(module, name)

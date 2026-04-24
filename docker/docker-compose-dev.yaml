@@ -92,6 +92,7 @@ services:
       - ../frontend/src:/app/frontend/src
       - ../frontend/public:/app/frontend/public
       - ../frontend/next.config.js:/app/frontend/next.config.js:ro
+      - ../backend/.deer-flow:/app/.deer-flow
       - ../logs:/app/logs
       # Mount pnpm store for caching
       - ${PNPM_STORE_PATH:-~/.local/share/pnpm/store}:/root/.local/share/pnpm/store
@@ -100,8 +101,10 @@ services:
       - NODE_ENV=development
       - WATCHPACK_POLLING=true
       - CI=true
+      - DEER_FLOW_HOME=/app/.deer-flow
       - DEER_FLOW_INTERNAL_GATEWAY_BASE_URL=http://gateway:8001
       - DEER_FLOW_INTERNAL_LANGGRAPH_BASE_URL=http://langgraph:2024
+      - DEER_FLOW_AUTH_SEED_USERS=${DEER_FLOW_AUTH_SEED_USERS:-[{"email":"admin@mindigitalgroup.com","password":"ChangeMe123!","name":"Mindigital Admin","role":"admin"},{"email":"alice@mindigitalgroup.com","password":"ChangeMe123!","name":"Alice Chen","role":"member"},{"email":"bob@mindigitalgroup.com","password":"ChangeMe123!","name":"Bob Liu","role":"member"},{"email":"carol@mindigitalgroup.com","password":"ChangeMe123!","name":"Carol Wang","role":"member"},{"email":"david@mindigitalgroup.com","password":"ChangeMe123!","name":"David Zhang","role":"member"}]}
     env_file:
       - ../frontend/.env
     networks:

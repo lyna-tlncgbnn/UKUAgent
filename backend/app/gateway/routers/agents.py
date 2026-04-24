@@ -5,9 +5,11 @@ import re
 import shutil
 
 import yaml
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, Field
 
+from app.gateway.auth import require_current_user
+from deerflow.agents.memory.updater import get_user_profile_markdown, update_user_profile_markdown
 from deerflow.config.agents_config import AgentConfig, list_custom_agents, load_agent_config, load_agent_soul
 from deerflow.config.paths import get_paths
 
@@ -292,13 +294,13 @@ async def update_agent(name: str, request: AgentUpdateRequest) -> AgentResponse:
 
 
 class UserProfileResponse(BaseModel):
-    """Response model for the global user profile (USER.md)."""
+    """Response model for the current user's profile markdown."""
 
-    content: str | None = Field(default=None, description="USER.md content, or null if not yet created")
+    content: str | None = Field(default=None, description="Profile markdown content, or null if not yet created")
 
 
 class UserProfileUpdateRequest(BaseModel):
-    """Request body for setting the global user profile."""
+    """Request body for setting the current user's profile markdown."""
 
     content: str = Field(default="", description="USER.md content — describes the user's background and preferences")
 
@@ -307,19 +309,17 @@ class UserProfileUpdateRequest(BaseModel):
     "/user-profile",
     response_model=UserProfileResponse,
     summary="Get User Profile",
-    description="Read the global USER.md file that is injected into all custom agents.",
+    description="Read the current authenticated user's profile markdown.",
 )
-async def get_user_profile() -> UserProfileResponse:
-    """Return the current USER.md content.
+async def get_user_profile(request: Request) -> UserProfileResponse:
+    """Return the current authenticated user's profile markdown.
 
     Returns:
-        UserProfileResponse with content=None if USER.md does not exist yet.
+        UserProfileResponse with content=None if no profile exists yet.
     """
     try:
-        user_md_path = get_paths().user_md_file
-        if not user_md_path.exists():
-            return UserProfileResponse(content=None)
-        raw = user_md_path.read_text(encoding="utf-8").strip()
+        current_user = require_current_user(request)
+        raw = get_user_profile_markdown(current_user.id).strip()
         return UserProfileResponse(content=raw or None)
     except Exception as e:
         logger.error(f"Failed to read user profile: {e}", exc_info=True)
@@ -330,23 +330,23 @@ async def get_user_profile() -> UserProfileResponse:
     "/user-profile",
     response_model=UserProfileResponse,
     summary="Update User Profile",
-    description="Write the global USER.md file that is injected into all custom agents.",
+    description="Write the current authenticated user's profile markdown.",
 )
-async def update_user_profile(request: UserProfileUpdateRequest) -> UserProfileResponse:
-    """Create or overwrite the global USER.md.
+async def update_user_profile(request: Request, payload: UserProfileUpdateRequest) -> UserProfileResponse:
+    """Create or overwrite the current authenticated user's profile markdown.
 
     Args:
-        request: The update request with the new USER.md content.
+        payload: The update request with the new profile markdown content.
 
     Returns:
         UserProfileResponse with the saved content.
     """
     try:
-        paths = get_paths()
-        paths.base_dir.mkdir(parents=True, exist_ok=True)
-        paths.user_md_file.write_text(request.content, encoding="utf-8")
-        logger.info(f"Updated USER.md at {paths.user_md_file}")
-        return UserProfileResponse(content=request.content or None)
+        current_user = require_current_user(request)
+        if not update_user_profile_markdown(current_user.id, payload.content):
+            raise HTTPException(status_code=500, detail="Failed to update user profile.")
+        logger.info("Updated user profile for %s", current_user.id)
+        return UserProfileResponse(content=payload.content or None)
     except Exception as e:
         logger.error(f"Failed to update user profile: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Failed to update user profile: {str(e)}")

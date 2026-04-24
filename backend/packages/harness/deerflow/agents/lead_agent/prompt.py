@@ -165,6 +165,7 @@ You are {agent_name}, an open-source super agent.
 </role>
 
 {soul}
+{user_profile_context}
 {memory_context}
 
 <thinking_style>
@@ -348,7 +349,7 @@ combined with a FastAPI gateway for REST API access [citation:FastAPI](https://f
 """
 
 
-def _get_memory_context(agent_name: str | None = None) -> str:
+def _get_memory_context(agent_name: str | None = None, user_id: str | None = None) -> str:
     """Get memory context for injection into system prompt.
 
     Args:
@@ -365,7 +366,7 @@ def _get_memory_context(agent_name: str | None = None) -> str:
         if not config.enabled or not config.injection_enabled:
             return ""
 
-        memory_data = get_memory_data(agent_name)
+        memory_data = get_memory_data(agent_name, user_id=user_id)
         memory_content = format_memory_for_injection(memory_data, max_tokens=config.max_injection_tokens)
 
         if not memory_content.strip():
@@ -377,6 +378,25 @@ def _get_memory_context(agent_name: str | None = None) -> str:
 """
     except Exception as e:
         logger.error("Failed to load memory context: %s", e)
+        return ""
+
+
+def _get_user_profile_context(user_id: str | None = None) -> str:
+    """Get per-user profile markdown for injection into the system prompt."""
+
+    try:
+        from deerflow.agents.memory.updater import get_user_profile_markdown
+
+        profile_markdown = get_user_profile_markdown(user_id)
+        if not profile_markdown.strip():
+            return ""
+
+        return f"""<user_profile>
+{profile_markdown}
+</user_profile>
+"""
+    except Exception as e:
+        logger.error("Failed to load user profile context: %s", e)
         return ""
 
 
@@ -499,9 +519,17 @@ def _build_custom_mounts_section() -> str:
     return f"\n**Custom Mounted Directories:**\n{mounts_list}\n- If the user needs files outside `/mnt/user-data`, use these absolute container paths directly when they match the requested directory"
 
 
-def apply_prompt_template(subagent_enabled: bool = False, max_concurrent_subagents: int = 3, *, agent_name: str | None = None, available_skills: set[str] | None = None) -> str:
+def apply_prompt_template(
+    subagent_enabled: bool = False,
+    max_concurrent_subagents: int = 3,
+    *,
+    agent_name: str | None = None,
+    user_id: str | None = None,
+    available_skills: set[str] | None = None,
+) -> str:
     # Get memory context
-    memory_context = _get_memory_context(agent_name)
+    memory_context = _get_memory_context(agent_name, user_id=user_id)
+    user_profile_context = _get_user_profile_context(user_id)
 
     # Include subagent section only if enabled (from runtime parameter)
     n = max_concurrent_subagents
@@ -540,6 +568,7 @@ def apply_prompt_template(subagent_enabled: bool = False, max_concurrent_subagen
     prompt = SYSTEM_PROMPT_TEMPLATE.format(
         agent_name=agent_name or "DeerFlow 2.0",
         soul=get_agent_soul(agent_name),
+        user_profile_context=user_profile_context,
         skills_section=skills_section,
         deferred_tools_section=deferred_tools_section,
         memory_context=memory_context,

@@ -20,9 +20,10 @@ from typing import Any
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, Field
 
+from app.gateway.auth import require_business_store, require_current_user, require_owned_thread
 from app.gateway.deps import get_checkpointer, get_store
 from deerflow.config.paths import Paths, get_paths
-from deerflow.runtime import serialize_channel_values
+from deerflow.runtime.serialization import serialize_channel_values
 
 # ---------------------------------------------------------------------------
 # Store namespace
@@ -221,6 +222,8 @@ async def delete_thread_data(thread_id: str, request: Request) -> ThreadDeleteRe
     Cleans DeerFlow-managed thread directories, removes checkpoint data,
     and removes the thread record from the Store.
     """
+    await require_owned_thread(request, thread_id)
+
     # Clean local filesystem
     response = _delete_thread_data(thread_id)
 
@@ -254,8 +257,15 @@ async def create_thread(body: ThreadCreateRequest, request: Request) -> ThreadRe
     """
     store = get_store(request)
     checkpointer = get_checkpointer(request)
+    business_store = require_business_store(request)
+    current_user = require_current_user(request)
     thread_id = body.thread_id or str(uuid.uuid4())
     now = time.time()
+
+    if business_store is not None:
+        existing_business_thread = await business_store.get_thread(thread_id)
+        if existing_business_thread is not None and existing_business_thread.user_id != current_user.id:
+            raise HTTPException(status_code=404, detail=f"Thread {thread_id} not found")
 
     # Idempotency: return existing record from Store when already present
     if store is not None:
@@ -304,6 +314,18 @@ async def create_thread(body: ThreadCreateRequest, request: Request) -> ThreadRe
         logger.exception("Failed to create checkpoint for thread %s", thread_id)
         raise HTTPException(status_code=500, detail="Failed to create thread")
 
+    if business_store is not None and current_user is not None:
+        try:
+            await business_store.create_thread(
+                thread_id,
+                user_id=current_user.id,
+                title=body.metadata.get("title"),
+                source="web",
+            )
+        except Exception:
+            logger.exception("Failed to create business thread metadata for %s", thread_id)
+            raise HTTPException(status_code=500, detail="Failed to create thread metadata")
+
     logger.info("Thread created: %s", thread_id)
     return ThreadResponse(
         thread_id=thread_id,
@@ -333,6 +355,8 @@ async def search_threads(body: ThreadSearchRequest, request: Request) -> list[Th
     """
     store = get_store(request)
     checkpointer = get_checkpointer(request)
+    business_store = require_business_store(request)
+    current_user = require_current_user(request)
 
     # -----------------------------------------------------------------------
     # Phase 1: Store
@@ -366,7 +390,7 @@ async def search_threads(body: ThreadSearchRequest, request: Request) -> list[Th
         async for checkpoint_tuple in checkpointer.alist(None):
             cfg = getattr(checkpoint_tuple, "config", {})
             thread_id = cfg.get("configurable", {}).get("thread_id")
-            if not thread_id or thread_id in merged:
+            if not thread_id:
                 continue
 
             # Skip sub-graph checkpoints (checkpoint_ns is non-empty for those)
@@ -392,10 +416,22 @@ async def search_threads(body: ThreadSearchRequest, request: Request) -> list[Th
                 metadata=user_meta,
                 values=ckpt_values,
             )
-            merged[thread_id] = thread_resp
+            existing = merged.get(thread_id)
+            if existing is not None:
+                merged[thread_id] = ThreadResponse(
+                    thread_id=thread_id,
+                    status=thread_resp.status or existing.status,
+                    created_at=thread_resp.created_at or existing.created_at,
+                    updated_at=thread_resp.updated_at or existing.updated_at,
+                    metadata={**existing.metadata, **user_meta},
+                    values={**existing.values, **ckpt_values},
+                )
+            else:
+                merged[thread_id] = thread_resp
 
-            # Lazy migration — write to Store so the next search finds it there
-            if store is not None:
+            # Lazy migration / refresh — write checkpoint-derived metadata
+            # back to the Store so search results stay in sync with title/state.
+            if store is not None and (user_meta or ckpt_values):
                 try:
                     await _store_upsert(store, thread_id, metadata=user_meta, values=ckpt_values or None)
                 except Exception:
@@ -408,6 +444,15 @@ async def search_threads(body: ThreadSearchRequest, request: Request) -> list[Th
     # Phase 3: Filter → sort → paginate
     # -----------------------------------------------------------------------
     results = list(merged.values())
+
+    if business_store is not None and current_user is not None:
+        try:
+            owned_threads = await business_store.list_threads_for_user(current_user.id)
+            owned_thread_ids = {thread.id for thread in owned_threads}
+            results = [item for item in results if item.thread_id in owned_thread_ids]
+        except Exception:
+            logger.exception("Failed to filter threads by current user")
+            raise HTTPException(status_code=500, detail="Failed to search threads")
 
     if body.metadata:
         results = [r for r in results if all(r.metadata.get(k) == v for k, v in body.metadata.items())]
@@ -422,6 +467,7 @@ async def search_threads(body: ThreadSearchRequest, request: Request) -> list[Th
 @router.patch("/{thread_id}", response_model=ThreadResponse)
 async def patch_thread(thread_id: str, body: ThreadPatchRequest, request: Request) -> ThreadResponse:
     """Merge metadata into a thread record."""
+    await require_owned_thread(request, thread_id)
     store = get_store(request)
     if store is None:
         raise HTTPException(status_code=503, detail="Store not available")
@@ -458,6 +504,8 @@ async def get_thread(thread_id: str, request: Request) -> ThreadResponse:
     status from the checkpointer.  Falls back to the checkpointer alone
     for threads that pre-date Store adoption (backward compat).
     """
+    await require_owned_thread(request, thread_id)
+
     store = get_store(request)
     checkpointer = get_checkpointer(request)
 
@@ -509,6 +557,7 @@ async def get_thread_state(thread_id: str, request: Request) -> ThreadStateRespo
     Channel values are serialized to ensure LangChain message objects
     are converted to JSON-safe dicts.
     """
+    await require_owned_thread(request, thread_id)
     checkpointer = get_checkpointer(request)
 
     config = {"configurable": {"thread_id": thread_id, "checkpoint_ns": ""}}
@@ -559,6 +608,7 @@ async def update_thread_state(thread_id: str, body: ThreadStateUpdateRequest, re
     channel values, then syncs any updated ``title`` field back to the Store
     so that ``/threads/search`` reflects the change immediately.
     """
+    await require_owned_thread(request, thread_id)
     checkpointer = get_checkpointer(request)
     store = get_store(request)
 
@@ -637,6 +687,7 @@ async def update_thread_state(thread_id: str, body: ThreadStateUpdateRequest, re
 @router.post("/{thread_id}/history", response_model=list[HistoryEntry])
 async def get_thread_history(thread_id: str, body: ThreadHistoryRequest, request: Request) -> list[HistoryEntry]:
     """Get checkpoint history for a thread."""
+    await require_owned_thread(request, thread_id)
     checkpointer = get_checkpointer(request)
 
     config: dict[str, Any] = {"configurable": {"thread_id": thread_id}}

@@ -14,6 +14,7 @@ import uuid
 from fastapi import APIRouter, Request
 from fastapi.responses import StreamingResponse
 
+from app.gateway.auth import require_owned_thread
 from app.gateway.deps import get_checkpointer, get_run_manager, get_stream_bridge
 from app.gateway.routers.thread_runs import RunCreateRequest
 from app.gateway.services import sse_consumer, start_run
@@ -40,6 +41,7 @@ async def stateless_stream(body: RunCreateRequest, request: Request) -> Streamin
     Otherwise a new temporary thread is created.
     """
     thread_id = _resolve_thread_id(body)
+    await require_owned_thread(request, thread_id, allow_missing=True)
     bridge = get_stream_bridge(request)
     run_mgr = get_run_manager(request)
     record = await start_run(body, thread_id, request)
@@ -64,6 +66,7 @@ async def stateless_wait(body: RunCreateRequest, request: Request) -> dict:
     Otherwise a new temporary thread is created.
     """
     thread_id = _resolve_thread_id(body)
+    await require_owned_thread(request, thread_id, allow_missing=True)
     record = await start_run(body, thread_id, request)
 
     if record.task is not None:
