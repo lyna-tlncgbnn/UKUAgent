@@ -463,7 +463,11 @@ export function useDeleteThread() {
   const apiClient = getAPIClient();
   return useMutation({
     mutationFn: async ({ threadId }: { threadId: string }) => {
-      await apiClient.threads.delete(threadId);
+      // 捕获并忽略底层的 404 错误。如果是“幽灵对话”，即使底层没数据，
+      // 也要让代码继续往下走，从而彻底清理掉后端的 Store 和 Business 数据库中的残留索引。
+      await apiClient.threads.delete(threadId).catch((err) => {
+        console.warn("LangGraph thread deletion failed (likely a ghost thread), proceeding with local cleanup:", err);
+      });
 
       const response = await fetch(
         `${getBackendBaseURL()}/api/threads/${encodeURIComponent(threadId)}`,
