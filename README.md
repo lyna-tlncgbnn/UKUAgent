@@ -482,6 +482,7 @@ Then make sure DeerFlow is running (default at `http://localhost:2026`) and use 
 - Choose execution modes: flash (fast), standard, pro (planning), ultra (sub-agents)
 - Check DeerFlow health, list models/skills/agents
 - Manage threads and conversation history
+- Create and manage scheduled agent tasks from the workspace or conversation tools
 - Upload files for analysis
 
 **Environment variables** (optional, for custom endpoints):

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from datetime import datetime
 
 from sqlalchemy import delete, or_, select
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker, create_async_engine
@@ -14,6 +15,14 @@ from .models import (
     AgentVisibility,
     Base,
     McpAccessRuleRecord,
+    ScheduledTaskConcurrencyPolicy,
+    ScheduledTaskRecord,
+    ScheduledTaskRunRecord,
+    ScheduledTaskRunStatus,
+    ScheduledTaskScheduleType,
+    ScheduledTaskStatus,
+    ScheduledTaskThreadPolicy,
+    ScheduledTaskTriggerType,
     ThreadFileKind,
     ThreadFileRecord,
     ThreadRecord,
@@ -288,6 +297,224 @@ class BusinessStore:
             await session.commit()
             await session.refresh(record)
             return record
+
+    async def create_scheduled_task(
+        self,
+        task_id: str,
+        *,
+        user_id: str,
+        title: str,
+        description: str | None,
+        assistant_id: str,
+        prompt: str,
+        schedule_type: ScheduledTaskScheduleType,
+        timezone: str,
+        cron_expr: str | None,
+        interval_seconds: int | None,
+        run_at: datetime | None,
+        next_run_at: datetime | None,
+        status: ScheduledTaskStatus = ScheduledTaskStatus.ACTIVE,
+        concurrency_policy: ScheduledTaskConcurrencyPolicy = ScheduledTaskConcurrencyPolicy.SKIP,
+        thread_policy: ScheduledTaskThreadPolicy = ScheduledTaskThreadPolicy.NEW_THREAD_EACH_RUN,
+        thread_id: str | None = None,
+        metadata: dict | None = None,
+    ) -> ScheduledTaskRecord:
+        async with self.session() as session:
+            record = ScheduledTaskRecord(
+                id=task_id,
+                user_id=user_id,
+                title=title,
+                description=description,
+                assistant_id=assistant_id,
+                prompt=prompt,
+                schedule_type=schedule_type,
+                timezone=timezone,
+                cron_expr=cron_expr,
+                interval_seconds=interval_seconds,
+                run_at=run_at,
+                next_run_at=next_run_at,
+                status=status,
+                concurrency_policy=concurrency_policy,
+                thread_policy=thread_policy,
+                thread_id=thread_id,
+                task_metadata=metadata or {},
+            )
+            session.add(record)
+            await session.commit()
+            await session.refresh(record)
+            return record
+
+    async def get_scheduled_task(self, task_id: str) -> ScheduledTaskRecord | None:
+        async with self.session() as session:
+            return await session.get(ScheduledTaskRecord, task_id)
+
+    async def get_scheduled_task_for_user(self, task_id: str, user_id: str) -> ScheduledTaskRecord | None:
+        async with self.session() as session:
+            result = await session.execute(
+                select(ScheduledTaskRecord).where(
+                    ScheduledTaskRecord.id == task_id,
+                    ScheduledTaskRecord.user_id == user_id,
+                )
+            )
+            return result.scalar_one_or_none()
+
+    async def list_scheduled_tasks_for_user(self, user_id: str) -> list[ScheduledTaskRecord]:
+        async with self.session() as session:
+            result = await session.execute(
+                select(ScheduledTaskRecord)
+                .where(ScheduledTaskRecord.user_id == user_id)
+                .order_by(ScheduledTaskRecord.updated_at.desc())
+            )
+            return list(result.scalars().all())
+
+    async def update_scheduled_task(
+        self,
+        task_id: str,
+        *,
+        user_id: str | None = None,
+        **fields,
+    ) -> ScheduledTaskRecord | None:
+        async with self.session() as session:
+            record = await session.get(ScheduledTaskRecord, task_id)
+            if record is None:
+                return None
+            if user_id is not None and record.user_id != user_id:
+                return None
+            for key, value in fields.items():
+                if key == "metadata":
+                    key = "task_metadata"
+                if hasattr(ScheduledTaskRecord, key):
+                    setattr(record, key, value)
+            await session.commit()
+            await session.refresh(record)
+            return record
+
+    async def list_due_scheduled_tasks(
+        self,
+        now: datetime,
+        *,
+        limit: int = 25,
+    ) -> list[ScheduledTaskRecord]:
+        async with self.session() as session:
+            result = await session.execute(
+                select(ScheduledTaskRecord)
+                .where(
+                    ScheduledTaskRecord.status == ScheduledTaskStatus.ACTIVE,
+                    ScheduledTaskRecord.next_run_at.is_not(None),
+                    ScheduledTaskRecord.next_run_at <= now,
+                    or_(ScheduledTaskRecord.locked_until.is_(None), ScheduledTaskRecord.locked_until <= now),
+                )
+                .order_by(ScheduledTaskRecord.next_run_at.asc())
+                .limit(limit)
+            )
+            return list(result.scalars().all())
+
+    async def has_running_scheduled_task_run(self, task_id: str) -> bool:
+        async with self.session() as session:
+            result = await session.execute(
+                select(ScheduledTaskRunRecord.id)
+                .where(
+                    ScheduledTaskRunRecord.task_id == task_id,
+                    ScheduledTaskRunRecord.status.in_(
+                        [
+                            ScheduledTaskRunStatus.QUEUED,
+                            ScheduledTaskRunStatus.RUNNING,
+                        ]
+                    ),
+                )
+                .limit(1)
+            )
+            return result.scalar_one_or_none() is not None
+
+    async def create_scheduled_task_run(
+        self,
+        run_record_id: str,
+        *,
+        task_id: str,
+        user_id: str,
+        thread_id: str | None,
+        run_id: str | None,
+        scheduled_for: datetime | None,
+        started_at: datetime | None,
+        finished_at: datetime | None = None,
+        status: ScheduledTaskRunStatus = ScheduledTaskRunStatus.QUEUED,
+        trigger_type: ScheduledTaskTriggerType = ScheduledTaskTriggerType.SCHEDULE,
+        error: str | None = None,
+        result_summary: str | None = None,
+    ) -> ScheduledTaskRunRecord:
+        async with self.session() as session:
+            record = ScheduledTaskRunRecord(
+                id=run_record_id,
+                task_id=task_id,
+                user_id=user_id,
+                thread_id=thread_id,
+                run_id=run_id,
+                scheduled_for=scheduled_for,
+                started_at=started_at,
+                finished_at=finished_at,
+                status=status,
+                trigger_type=trigger_type,
+                error=error,
+                result_summary=result_summary,
+            )
+            session.add(record)
+            await session.commit()
+            await session.refresh(record)
+            return record
+
+    async def update_scheduled_task_run(
+        self,
+        run_record_id: str,
+        *,
+        user_id: str | None = None,
+        **fields,
+    ) -> ScheduledTaskRunRecord | None:
+        async with self.session() as session:
+            record = await session.get(ScheduledTaskRunRecord, run_record_id)
+            if record is None:
+                return None
+            if user_id is not None and record.user_id != user_id:
+                return None
+            for key, value in fields.items():
+                if hasattr(ScheduledTaskRunRecord, key):
+                    setattr(record, key, value)
+            await session.commit()
+            await session.refresh(record)
+            return record
+
+    async def list_scheduled_task_runs(
+        self,
+        *,
+        task_id: str,
+        user_id: str,
+    ) -> list[ScheduledTaskRunRecord]:
+        async with self.session() as session:
+            result = await session.execute(
+                select(ScheduledTaskRunRecord)
+                .where(
+                    ScheduledTaskRunRecord.task_id == task_id,
+                    ScheduledTaskRunRecord.user_id == user_id,
+                )
+                .order_by(ScheduledTaskRunRecord.created_at.desc())
+            )
+            return list(result.scalars().all())
+
+    async def get_scheduled_task_run_for_user(
+        self,
+        run_record_id: str,
+        *,
+        task_id: str,
+        user_id: str,
+    ) -> ScheduledTaskRunRecord | None:
+        async with self.session() as session:
+            result = await session.execute(
+                select(ScheduledTaskRunRecord).where(
+                    ScheduledTaskRunRecord.id == run_record_id,
+                    ScheduledTaskRunRecord.task_id == task_id,
+                    ScheduledTaskRunRecord.user_id == user_id,
+                )
+            )
+            return result.scalar_one_or_none()
 
 
 @asynccontextmanager

@@ -380,7 +380,7 @@ async def search_threads(body: ThreadSearchRequest, request: Request) -> list[Th
     if business_store is not None and current_user is not None:
         try:
             owned_threads = await business_store.list_threads_for_user(current_user.id)
-            owned_thread_ids = {thread.id for thread in owned_threads}
+            owned_thread_ids = {thread.id for thread in owned_threads if thread.source != "scheduled_task"}
             results = [item for item in results if item.thread_id in owned_thread_ids]
         except Exception:
             logger.exception("Failed to filter threads by current user")

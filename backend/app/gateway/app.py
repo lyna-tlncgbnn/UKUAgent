@@ -16,6 +16,7 @@ from app.gateway.routers import (
     memory,
     models,
     runs,
+    scheduled_tasks,
     skills,
     suggestions,
     thread_runs,
@@ -54,6 +55,16 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         logger.info("LangGraph runtime initialised")
 
         # Start IM channel service if any channels are configured
+        scheduler_runner = None
+        try:
+            from app.scheduler import SchedulerRunner
+
+            scheduler_runner = SchedulerRunner(app)
+            await scheduler_runner.start()
+            app.state.scheduler_runner = scheduler_runner
+        except Exception:
+            logger.exception("Scheduled task runner failed to start")
+
         try:
             from app.channels.service import start_channel_service
 
@@ -71,6 +82,12 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
             await stop_channel_service()
         except Exception:
             logger.exception("Failed to stop channel service")
+
+        if scheduler_runner is not None:
+            try:
+                await scheduler_runner.stop()
+            except Exception:
+                logger.exception("Failed to stop scheduled task runner")
 
     logger.info("Shutting down API Gateway")
 
@@ -150,6 +167,10 @@ This gateway provides custom endpoints for models, MCP configuration, skills, an
                 "description": "Manage IM channel integrations (Feishu, Slack, Telegram)",
             },
             {
+                "name": "scheduled-tasks",
+                "description": "Create and manage user-owned scheduled agent tasks",
+            },
+            {
                 "name": "assistants-compat",
                 "description": "LangGraph Platform-compatible assistants API (stub)",
             },
@@ -206,6 +227,9 @@ This gateway provides custom endpoints for models, MCP configuration, skills, an
 
     # Channels API is mounted at /api/channels
     app.include_router(channels.router)
+
+    # Scheduled Tasks API is mounted at /api/scheduled-tasks
+    app.include_router(scheduled_tasks.router)
 
     # Assistants compatibility API (LangGraph Platform stub)
     app.include_router(assistants_compat.router)

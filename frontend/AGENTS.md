@@ -56,6 +56,7 @@ src/
 │   ├── models/             # Data models & types
 │   ├── settings/           # User settings
 │   ├── skills/             # Skills system
+│   ├── scheduled-tasks/    # Scheduled agent task API, hooks, and types
 │   ├── threads/            # Thread management
 │   ├── todos/              # Todo system
 │   └── utils/              # Utility functions

@@ -410,6 +410,7 @@ npx skills add https://github.com/bytedance/deer-flow --skill claude-to-deerflow
 - 选择执行模式：flash（更快）、standard、pro（规划模式）、ultra（sub-agents 模式）
 - 检查 DeerFlow 健康状态，列出 models / skills / agents
 - 管理 threads 和会话历史
+- 在工作区或对话工具中创建和管理定时 agent 任务
 - 上传文件做分析
 
 **环境变量**（可选，用于自定义端点）：

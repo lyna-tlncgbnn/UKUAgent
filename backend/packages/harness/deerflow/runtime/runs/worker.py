@@ -89,7 +89,11 @@ async def run_agent(
 
         # Inject runtime context so middlewares can access thread_id
         # (langgraph-cli does this automatically; we must do it manually)
-        runtime = Runtime(context={"thread_id": thread_id}, store=store)
+        runtime_context = {"thread_id": thread_id}
+        user_id = config.get("configurable", {}).get("user_id")
+        if user_id:
+            runtime_context["user_id"] = user_id
+        runtime = Runtime(context=runtime_context, store=store)
         config.setdefault("configurable", {})["__pregel_runtime"] = runtime
 
         runnable_config = RunnableConfig(**config)

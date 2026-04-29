@@ -40,7 +40,7 @@ deer-flow/
 │   │           │   ├── builtins/      # general-purpose, bash agents
 │   │           │   ├── executor.py    # Background execution engine
 │   │           │   └── registry.py    # Agent registry
-│   │           ├── tools/builtins/    # Built-in tools (present_files, ask_clarification, view_image)
+│   │           ├── tools/builtins/    # Built-in tools (present_files, ask_clarification, view_image, scheduled tasks)
 │   │           ├── mcp/               # MCP integration (tools, cache, client)
 │   │           ├── models/            # Model factory with thinking/vision support
 │   │           ├── skills/            # Skills discovery, loading, parsing
@@ -210,6 +210,7 @@ FastAPI application on port 8001 with health check at `GET /health`.
 | **Threads** (`/api/threads/{id}`) | `DELETE /` - remove DeerFlow-managed local thread data after LangGraph thread deletion; unexpected failures are logged server-side and return a generic 500 detail |
 | **Artifacts** (`/api/threads/{id}/artifacts`) | `GET /{path}` - serve artifacts; active content types (`text/html`, `application/xhtml+xml`, `image/svg+xml`) are always forced as download attachments to reduce XSS risk; `?download=true` still forces download for other file types |
 | **Suggestions** (`/api/threads/{id}/suggestions`) | `POST /` - generate follow-up questions; rich list/block model content is normalized before JSON parsing |
+| **Scheduled Tasks** (`/api/scheduled-tasks`) | CRUD, pause/resume, run-now, and execution history for user-owned scheduled agent tasks |
 
 Proxied through nginx: `/api/langgraph/*` → LangGraph, all other `/api/*` → Gateway.
 
@@ -251,6 +252,7 @@ Proxied through nginx: `/api/langgraph/*` → LangGraph, all other `/api/*` → 
    - `present_files` - Make output files visible to user (only `/mnt/user-data/outputs`)
    - `ask_clarification` - Request clarification (intercepted by ClarificationMiddleware → interrupts)
    - `view_image` - Read image as base64 (added only if model supports vision)
+   - `create_scheduled_task`, `list_scheduled_tasks`, `pause_scheduled_task`, `resume_scheduled_task`, `delete_scheduled_task`, `run_scheduled_task_now` - Manage the current user's scheduled agent tasks through the Gateway API
 4. **Subagent tool** (if enabled):
    - `task` - Delegate to subagent (description, prompt, subagent_type, max_turns)
 

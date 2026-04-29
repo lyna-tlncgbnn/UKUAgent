@@ -8,6 +8,7 @@ import { toast } from "sonner";
 import type { PromptInputMessage } from "@/components/ai-elements/prompt-input";
 
 import { getAPIClient } from "../api";
+import { useAuthSession } from "../auth/hooks";
 import { getBackendBaseURL } from "../config";
 import { useI18n } from "../i18n/hooks";
 import type { FileInMessage } from "../messages/utils";
@@ -65,6 +66,8 @@ export function useThreadStream({
   onToolEnd,
 }: ThreadStreamOptions) {
   const { t } = useI18n();
+  const authSession = useAuthSession();
+  const currentUserId = authSession.data?.user.id;
   // Track the thread ID that is currently streaming to handle thread changes during streaming
   const [onStreamThreadId, setOnStreamThreadId] = useState(() => threadId);
   // Ref to track current thread ID across async callbacks without causing re-renders,
@@ -396,6 +399,7 @@ export function useThreadStream({
             context: {
               ...extraContext,
               ...context,
+              user_id: currentUserId,
               thinking_enabled: context.mode !== "flash",
               is_plan_mode: context.mode === "pro" || context.mode === "ultra",
               subagent_enabled: context.mode === "ultra",
@@ -421,7 +425,14 @@ export function useThreadStream({
         sendInFlightRef.current = false;
       }
     },
-    [thread, _handleOnStart, t.uploads.uploadingFiles, context, queryClient],
+    [
+      thread,
+      _handleOnStart,
+      t.uploads.uploadingFiles,
+      context,
+      currentUserId,
+      queryClient,
+    ],
   );
 
   // Merge thread with optimistic messages for display
@@ -448,7 +459,7 @@ export function useThreads(
     queryKey: ["threads", "search", params],
     queryFn: async () => {
       return searchThreads({
-        metadata: params.metadata,
+        metadata: params.metadata ?? undefined,
         limit: params.limit,
         offset: params.offset,
         status: params.status,

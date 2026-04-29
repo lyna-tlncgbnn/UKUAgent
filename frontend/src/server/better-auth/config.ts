@@ -183,7 +183,7 @@ function readAuthStore(): AuthStore {
       writeAuthStore(seeded);
       return seeded;
     }
-    const store = {
+    const store: AuthStore = {
       version: AUTH_STORE_VERSION,
       users: parsed.users.filter((user): user is AuthUserRecord => {
         return (

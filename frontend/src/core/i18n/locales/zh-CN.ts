@@ -163,6 +163,7 @@ export const zhCN: Translations = {
     recentChatsLoadError: "加载对话列表失败。",
     demoChats: "演示对话",
     agents: "智能体",
+    scheduledTasks: "定时任务",
   },
 
   // Agents

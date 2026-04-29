@@ -169,6 +169,7 @@ export const enUS: Translations = {
     recentChatsLoadError: "Failed to load recent chats.",
     demoChats: "Demo chats",
     agents: "Agents",
+    scheduledTasks: "Scheduled tasks",
   },
 
   // Agents

@@ -1,5 +1,6 @@
 import logging
 from datetime import datetime
+from zoneinfo import ZoneInfo
 
 from deerflow.config.agents_config import load_agent_soul
 from deerflow.skills import load_skills
@@ -578,4 +579,9 @@ def apply_prompt_template(
         acp_section=acp_and_mounts_section,
     )
 
-    return prompt + f"\n<current_date>{datetime.now().strftime('%Y-%m-%d, %A')}</current_date>"
+    now = datetime.now(ZoneInfo("Asia/Shanghai"))
+    return (
+        prompt
+        + f"\n<current_date>{now.strftime('%Y-%m-%d, %A')}</current_date>"
+        + f"\n<current_datetime timezone=\"Asia/Shanghai\">{now.isoformat()}</current_datetime>"
+    )

@@ -3,7 +3,7 @@ from __future__ import annotations
 import enum
 from datetime import datetime
 
-from sqlalchemy import JSON, DateTime, Enum, ForeignKey, String, Text, UniqueConstraint, func
+from sqlalchemy import JSON, DateTime, Enum, ForeignKey, Integer, String, Text, UniqueConstraint, func
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 
@@ -37,6 +37,45 @@ class McpScopeType(str, enum.Enum):
     ROLE = "role"
 
 
+class ScheduledTaskScheduleType(str, enum.Enum):
+    ONCE = "once"
+    INTERVAL = "interval"
+    CRON = "cron"
+
+
+class ScheduledTaskStatus(str, enum.Enum):
+    ACTIVE = "active"
+    PAUSED = "paused"
+    COMPLETED = "completed"
+    DISABLED = "disabled"
+
+
+class ScheduledTaskConcurrencyPolicy(str, enum.Enum):
+    SKIP = "skip"
+    INTERRUPT = "interrupt"
+    ENQUEUE = "enqueue"
+
+
+class ScheduledTaskThreadPolicy(str, enum.Enum):
+    NEW_THREAD_EACH_RUN = "new_thread_each_run"
+    REUSE_THREAD = "reuse_thread"
+
+
+class ScheduledTaskRunStatus(str, enum.Enum):
+    QUEUED = "queued"
+    RUNNING = "running"
+    SUCCESS = "success"
+    ERROR = "error"
+    SKIPPED = "skipped"
+    CANCELLED = "cancelled"
+
+
+class ScheduledTaskTriggerType(str, enum.Enum):
+    SCHEDULE = "schedule"
+    MANUAL = "manual"
+    CONVERSATION = "conversation"
+
+
 class UserRecord(Base):
     __tablename__ = "users"
 
@@ -56,6 +95,7 @@ class UserRecord(Base):
     threads: Mapped[list[ThreadRecord]] = relationship(back_populates="user", cascade="all, delete-orphan")
     memory: Mapped[UserMemoryRecord | None] = relationship(back_populates="user", cascade="all, delete-orphan", uselist=False)
     owned_agents: Mapped[list[AgentRecord]] = relationship(back_populates="owner", cascade="all, delete-orphan")
+    scheduled_tasks: Mapped[list[ScheduledTaskRecord]] = relationship(back_populates="user", cascade="all, delete-orphan")
 
 
 class ThreadRecord(Base):
@@ -160,3 +200,84 @@ class McpAccessRuleRecord(Base):
         onupdate=func.now(),
         nullable=False,
     )
+
+
+class ScheduledTaskRecord(Base):
+    __tablename__ = "scheduled_tasks"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    title: Mapped[str] = mapped_column(String(255), nullable=False)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    assistant_id: Mapped[str] = mapped_column(String(255), default="lead_agent", nullable=False)
+    prompt: Mapped[str] = mapped_column(Text, nullable=False)
+
+    schedule_type: Mapped[ScheduledTaskScheduleType] = mapped_column(Enum(ScheduledTaskScheduleType), nullable=False)
+    timezone: Mapped[str] = mapped_column(String(64), default="Asia/Shanghai", nullable=False)
+    cron_expr: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    interval_seconds: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    run_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    next_run_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, index=True)
+
+    status: Mapped[ScheduledTaskStatus] = mapped_column(Enum(ScheduledTaskStatus), default=ScheduledTaskStatus.ACTIVE, nullable=False, index=True)
+    concurrency_policy: Mapped[ScheduledTaskConcurrencyPolicy] = mapped_column(
+        Enum(ScheduledTaskConcurrencyPolicy),
+        default=ScheduledTaskConcurrencyPolicy.SKIP,
+        nullable=False,
+    )
+    thread_policy: Mapped[ScheduledTaskThreadPolicy] = mapped_column(
+        Enum(ScheduledTaskThreadPolicy),
+        default=ScheduledTaskThreadPolicy.NEW_THREAD_EACH_RUN,
+        nullable=False,
+    )
+    thread_id: Mapped[str | None] = mapped_column(ForeignKey("threads.id", ondelete="SET NULL"), nullable=True, index=True)
+
+    last_run_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_success_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    failure_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+
+    locked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    locked_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, index=True)
+    locked_by: Mapped[str | None] = mapped_column(String(255), nullable=True)
+
+    task_metadata: Mapped[dict] = mapped_column("metadata", JSON, default=dict, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
+    )
+
+    user: Mapped[UserRecord] = relationship(back_populates="scheduled_tasks")
+    runs: Mapped[list[ScheduledTaskRunRecord]] = relationship(back_populates="task", cascade="all, delete-orphan")
+
+
+class ScheduledTaskRunRecord(Base):
+    __tablename__ = "scheduled_task_runs"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    task_id: Mapped[str] = mapped_column(ForeignKey("scheduled_tasks.id", ondelete="CASCADE"), nullable=False, index=True)
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    thread_id: Mapped[str | None] = mapped_column(ForeignKey("threads.id", ondelete="SET NULL"), nullable=True, index=True)
+    run_id: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+
+    scheduled_for: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, index=True)
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    status: Mapped[ScheduledTaskRunStatus] = mapped_column(Enum(ScheduledTaskRunStatus), default=ScheduledTaskRunStatus.QUEUED, nullable=False, index=True)
+    trigger_type: Mapped[ScheduledTaskTriggerType] = mapped_column(Enum(ScheduledTaskTriggerType), default=ScheduledTaskTriggerType.SCHEDULE, nullable=False)
+    error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    result_summary: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
+    )
+
+    task: Mapped[ScheduledTaskRecord] = relationship(back_populates="runs")
