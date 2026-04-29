@@ -345,9 +345,11 @@ export interface Translations {
       system: string;
       light: string;
       dark: string;
+      uku: string;
       systemDescription: string;
       lightDescription: string;
       darkDescription: string;
+      ukuDescription: string;
       languageTitle: string;
       languageDescription: string;
     };

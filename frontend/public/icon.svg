@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <rect width="64" height="64" rx="16" fill="#159b85" />
+  <text
+    x="32"
+    y="38"
+    fill="#ffffff"
+    font-family="Arial, Helvetica, sans-serif"
+    font-size="20"
+    font-weight="800"
+    letter-spacing="-1"
+    text-anchor="middle"
+  >
+    UKU
+  </text>
+</svg>

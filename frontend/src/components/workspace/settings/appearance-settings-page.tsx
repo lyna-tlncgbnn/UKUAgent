@@ -1,6 +1,11 @@
 "use client";
 
-import { MonitorSmartphoneIcon, MoonIcon, SunIcon } from "lucide-react";
+import {
+  BadgeCheckIcon,
+  MonitorSmartphoneIcon,
+  MoonIcon,
+  SunIcon,
+} from "lucide-react";
 import { useTheme } from "next-themes";
 import { useMemo, type ComponentType, type SVGProps } from "react";
 
@@ -23,10 +28,13 @@ const languageOptions: { value: Locale; label: string }[] = [
   { value: "zh-CN", label: zhCN.locale.localName },
 ];
 
+type ThemeMode = "system" | "light" | "dark" | "uku";
+type PreviewMode = "light" | "dark" | "uku";
+
 export function AppearanceSettingsPage() {
   const { t, locale, changeLocale } = useI18n();
   const { theme, setTheme, systemTheme } = useTheme();
-  const currentTheme = (theme ?? "system") as "system" | "light" | "dark";
+  const currentTheme = (theme ?? "system") as ThemeMode;
 
   const themeOptions = useMemo(
     () => [
@@ -48,6 +56,12 @@ export function AppearanceSettingsPage() {
         description: t.settings.appearance.darkDescription,
         icon: MoonIcon,
       },
+      {
+        id: "uku",
+        label: t.settings.appearance.uku,
+        description: t.settings.appearance.ukuDescription,
+        icon: BadgeCheckIcon,
+      },
     ],
     [
       t.settings.appearance.dark,
@@ -56,6 +70,8 @@ export function AppearanceSettingsPage() {
       t.settings.appearance.lightDescription,
       t.settings.appearance.system,
       t.settings.appearance.systemDescription,
+      t.settings.appearance.uku,
+      t.settings.appearance.ukuDescription,
     ],
   );
 
@@ -65,7 +81,7 @@ export function AppearanceSettingsPage() {
         title={t.settings.appearance.themeTitle}
         description={t.settings.appearance.themeDescription}
       >
-        <div className="grid gap-3 lg:grid-cols-3">
+        <div className="grid gap-3 lg:grid-cols-2 2xl:grid-cols-4">
           {themeOptions.map((option) => (
             <ThemePreviewCard
               key={option.id}
@@ -73,7 +89,7 @@ export function AppearanceSettingsPage() {
               label={option.label}
               description={option.description}
               active={currentTheme === option.id}
-              mode={option.id as "system" | "light" | "dark"}
+              mode={option.id as ThemeMode}
               systemTheme={systemTheme}
               onSelect={(value) => setTheme(value)}
             />
@@ -124,12 +140,16 @@ function ThemePreviewCard({
   label: string;
   description: string;
   active: boolean;
-  mode: "system" | "light" | "dark";
+  mode: ThemeMode;
   systemTheme?: string;
-  onSelect: (mode: "system" | "light" | "dark") => void;
+  onSelect: (mode: ThemeMode) => void;
 }) {
-  const previewMode =
-    mode === "system" ? (systemTheme === "dark" ? "dark" : "light") : mode;
+  const previewMode: PreviewMode =
+    mode === "system"
+      ? systemTheme === "dark"
+        ? "dark"
+        : "light"
+      : mode;
   return (
     <button
       type="button"
@@ -155,16 +175,26 @@ function ThemePreviewCard({
       <div
         className={cn(
           "relative overflow-hidden rounded-md border text-xs transition-colors",
-          previewMode === "dark"
-            ? "border-neutral-800 bg-neutral-900 text-neutral-200"
-            : "border-slate-200 bg-white text-slate-900",
+          previewMode === "dark" &&
+            "border-neutral-800 bg-neutral-900 text-neutral-200",
+          previewMode === "light" &&
+            "border-slate-200 bg-white text-slate-900",
+          previewMode === "uku" &&
+            "border-[#d5e5df] bg-[#f7fbf9] text-[#16372f]",
         )}
       >
-        <div className="border-border/50 flex items-center gap-2 border-b px-3 py-2">
+        <div
+          className={cn(
+            "flex items-center gap-2 border-b px-3 py-2",
+            previewMode === "uku" ? "border-[#d5e5df]" : "border-border/50",
+          )}
+        >
           <div
             className={cn(
               "h-2 w-2 rounded-full",
-              previewMode === "dark" ? "bg-emerald-400" : "bg-emerald-500",
+              previewMode === "dark" && "bg-emerald-400",
+              previewMode === "light" && "bg-emerald-500",
+              previewMode === "uku" && "bg-[#159b85]",
             )}
           />
           <div className="h-2 w-10 rounded-full bg-current/20" />
@@ -174,11 +204,21 @@ function ThemePreviewCard({
           <div className="space-y-2">
             <div className="h-3 w-3/4 rounded-full bg-current/15" />
             <div className="h-3 w-1/2 rounded-full bg-current/10" />
-            <div className="h-[90px] rounded-md border border-current/10 bg-current/5" />
+            <div
+              className={cn(
+                "h-[90px] rounded-md border border-current/10 bg-current/5",
+                previewMode === "uku" && "bg-[#eaf4f0]",
+              )}
+            />
           </div>
           <div className="space-y-2">
             <div className="flex items-center gap-2">
-              <div className="h-8 w-8 rounded-md bg-current/10" />
+              <div
+                className={cn(
+                  "h-8 w-8 rounded-md bg-current/10",
+                  previewMode === "uku" && "bg-[#d9eee8]",
+                )}
+              />
               <div className="space-y-2">
                 <div className="h-2 w-14 rounded-full bg-current/15" />
                 <div className="h-2 w-10 rounded-full bg-current/10" />

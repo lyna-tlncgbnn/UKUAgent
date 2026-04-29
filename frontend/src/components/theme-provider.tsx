@@ -11,6 +11,7 @@ export function ThemeProvider({
   return (
     <NextThemesProvider
       {...props}
+      themes={["light", "dark", "uku"]}
       forcedTheme={pathname === "/" ? "dark" : undefined}
     >
       {children}
