@@ -12,7 +12,7 @@ import {
   runScheduledTaskNow,
   updateScheduledTask,
 } from "./api";
-import type { CreateScheduledTaskRequest, UpdateScheduledTaskRequest } from "./types";
+import type { CreateScheduledTaskRequest, ScheduledTask, UpdateScheduledTaskRequest } from "./types";
 
 export function useScheduledTasks() {
   const { data, isLoading, error } = useQuery({
@@ -89,7 +89,21 @@ export function useDeleteScheduledTask() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: deleteScheduledTask,
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["scheduled-tasks"] }),
+    onMutate: async (taskId) => {
+      await queryClient.cancelQueries({ queryKey: ["scheduled-tasks"] });
+      const previousTasks = queryClient.getQueryData<ScheduledTask[]>(["scheduled-tasks"]);
+      queryClient.setQueryData<ScheduledTask[]>(["scheduled-tasks"], (tasks) => tasks?.filter((task) => task.id !== taskId) ?? []);
+      return { previousTasks };
+    },
+    onError: (_error, _taskId, context) => {
+      if (context?.previousTasks) {
+        queryClient.setQueryData(["scheduled-tasks"], context.previousTasks);
+      }
+    },
+    onSuccess: (_data, taskId) => {
+      queryClient.removeQueries({ queryKey: ["scheduled-tasks", taskId] });
+      void queryClient.invalidateQueries({ queryKey: ["scheduled-tasks"], exact: true });
+    },
   });
 }
 

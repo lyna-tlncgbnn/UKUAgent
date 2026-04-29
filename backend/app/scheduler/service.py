@@ -193,6 +193,11 @@ class SchedulerService:
             raise SchedulerValidationError("Scheduled task not found.")
         return updated
 
+    async def delete_task(self, task: ScheduledTaskRecord) -> None:
+        deleted = await self.store.delete_scheduled_task(task.id, user_id=task.user_id)
+        if not deleted:
+            raise SchedulerValidationError("Scheduled task not found.")
+
     async def create_run_record(
         self,
         task: ScheduledTaskRecord,

@@ -120,6 +120,18 @@ class BusinessStore:
             result = await session.execute(select(ThreadRecord).where(ThreadRecord.user_id == user_id).order_by(ThreadRecord.updated_at.desc()))
             return list(result.scalars().all())
 
+    async def delete_thread(self, thread_id: str, *, user_id: str | None = None) -> bool:
+        async with self.session() as session:
+            record = await session.get(ThreadRecord, thread_id)
+            if record is None:
+                return False
+            if user_id is not None and record.user_id != user_id:
+                return False
+            await session.execute(delete(ThreadFileRecord).where(ThreadFileRecord.thread_id == thread_id))
+            await session.delete(record)
+            await session.commit()
+            return True
+
     async def record_thread_file(
         self,
         file_id: str,
@@ -388,6 +400,21 @@ class BusinessStore:
             await session.commit()
             await session.refresh(record)
             return record
+
+    async def delete_scheduled_task(self, task_id: str, *, user_id: str) -> bool:
+        async with self.session() as session:
+            record = await session.get(ScheduledTaskRecord, task_id)
+            if record is None or record.user_id != user_id:
+                return False
+            await session.execute(
+                delete(ScheduledTaskRunRecord).where(
+                    ScheduledTaskRunRecord.task_id == task_id,
+                    ScheduledTaskRunRecord.user_id == user_id,
+                )
+            )
+            await session.delete(record)
+            await session.commit()
+            return True
 
     async def list_due_scheduled_tasks(
         self,

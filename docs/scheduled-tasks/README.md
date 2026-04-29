@@ -32,8 +32,11 @@ Completed:
 - Default timezone is `Asia/Shanghai`.
 - Each scheduled execution creates a new thread by default.
 - First version uses local Gateway polling, not a distributed scheduler.
-- Task deletion is soft deletion through `disabled` status.
-- Execution history is retained in `scheduled_task_runs`.
+- Task deletion is hard deletion from `scheduled_tasks`.
+- Deleting a task also deletes its execution history from `scheduled_task_runs`.
+- Deleting a task also removes associated scheduled-task execution threads from
+  business thread metadata, Gateway thread listing storage, checkpointer data,
+  and local thread files on a best-effort basis.
 
 ## Step Documents
 

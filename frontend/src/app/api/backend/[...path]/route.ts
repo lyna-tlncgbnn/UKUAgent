@@ -66,6 +66,13 @@ async function proxyRequest(
     body: hasBody ? await request.arrayBuffer() : undefined,
   });
 
+  if (response.status === 204 || response.status === 304) {
+    return new Response(null, {
+      status: response.status,
+      headers: response.headers,
+    });
+  }
+
   return new Response(await response.arrayBuffer(), {
     status: response.status,
     headers: response.headers,

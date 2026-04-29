@@ -58,14 +58,13 @@ export async function updateScheduledTask(
   return response.json() as Promise<ScheduledTask>;
 }
 
-export async function deleteScheduledTask(taskId: string): Promise<ScheduledTask> {
+export async function deleteScheduledTask(taskId: string): Promise<void> {
   const response = await fetch(`${getBackendBaseURL()}/api/scheduled-tasks/${taskId}`, {
     method: "DELETE",
   });
   if (!response.ok) {
     throw new Error(await readErrorDetail(response, "Failed to delete scheduled task"));
   }
-  return response.json() as Promise<ScheduledTask>;
 }
 
 export async function pauseScheduledTask(taskId: string): Promise<ScheduledTask> {

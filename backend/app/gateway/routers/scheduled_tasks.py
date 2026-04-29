@@ -1,8 +1,10 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, HTTPException, Request, Response
 
 from app.gateway.auth import require_business_store, require_current_user
+from app.gateway.deps import get_checkpointer, get_store
+from app.gateway.routers.threads import THREADS_NS, _delete_thread_data
 from app.persistence import ScheduledTaskTriggerType
 from app.scheduler import SchedulerService
 from app.scheduler.schemas import (
@@ -31,6 +33,38 @@ def _service(request: Request) -> SchedulerService:
 
 def _validation_error(exc: SchedulerValidationError) -> HTTPException:
     return HTTPException(status_code=422, detail=str(exc))
+
+
+async def _delete_scheduled_task_threads(request: Request, *, user_id: str, thread_ids: set[str]) -> None:
+    if not thread_ids:
+        return
+
+    business_store = require_business_store(request)
+    store = get_store(request)
+    checkpointer = get_checkpointer(request)
+
+    for thread_id in thread_ids:
+        try:
+            await business_store.delete_thread(thread_id, user_id=user_id)
+        except Exception:
+            pass
+
+        if store is not None:
+            try:
+                await store.adelete(THREADS_NS, thread_id)
+            except Exception:
+                pass
+
+        if checkpointer is not None and hasattr(checkpointer, "adelete_thread"):
+            try:
+                await checkpointer.adelete_thread(thread_id)
+            except Exception:
+                pass
+
+        try:
+            _delete_thread_data(thread_id)
+        except Exception:
+            pass
 
 
 @router.get("", response_model=list[ScheduledTaskResponse])
@@ -67,14 +101,23 @@ async def update_scheduled_task(task_id: str, payload: ScheduledTaskUpdateReques
     return ScheduledTaskResponse.from_record(updated)
 
 
-@router.delete("/{task_id}", response_model=ScheduledTaskResponse)
-async def delete_scheduled_task(task_id: str, request: Request) -> ScheduledTaskResponse:
-    task = await _get_owned_task(request, task_id)
+@router.delete("/{task_id}", status_code=204)
+async def delete_scheduled_task(task_id: str, request: Request) -> Response:
+    store = require_business_store(request)
+    current_user = require_current_user(request)
+    task = await store.get_scheduled_task_for_user(task_id, current_user.id)
+    if task is None:
+        return Response(status_code=204)
+    runs = await store.list_scheduled_task_runs(task_id=task.id, user_id=task.user_id)
+    thread_ids = {run.thread_id for run in runs if run.thread_id}
+    if task.thread_id:
+        thread_ids.add(task.thread_id)
     try:
-        updated = await _service(request).disable_task(task)
+        await _service(request).delete_task(task)
     except SchedulerValidationError as exc:
         raise _validation_error(exc) from exc
-    return ScheduledTaskResponse.from_record(updated)
+    await _delete_scheduled_task_threads(request, user_id=task.user_id, thread_ids=thread_ids)
+    return Response(status_code=204)
 
 
 @router.post("/{task_id}/pause", response_model=ScheduledTaskResponse)

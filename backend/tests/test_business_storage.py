@@ -84,6 +84,8 @@ def test_business_store_round_trips_user_thread_memory_and_file():
             listed_files = await store.list_thread_files(thread_id="thread-1", kind=ThreadFileKind.UPLOAD)
             deleted_count = await store.delete_thread_file_by_path(thread_id="thread-1", storage_path="/tmp/test.txt")
             remaining_files = await store.list_thread_files(thread_id="thread-1", kind=ThreadFileKind.UPLOAD)
+            deleted_thread_wrong_user = await store.delete_thread("thread-1", user_id="user-2")
+            deleted_thread = await store.delete_thread("thread-1", user_id="user-1")
 
             assert fetched_user is not None
             assert fetched_thread is not None
@@ -92,6 +94,9 @@ def test_business_store_round_trips_user_thread_memory_and_file():
             assert [item.id for item in listed_files] == ["file-1"]
             assert deleted_count == 1
             assert remaining_files == []
+            assert deleted_thread_wrong_user is False
+            assert deleted_thread is True
+            assert await store.get_thread("thread-1") is None
 
     asyncio.run(run_test())
 
@@ -188,6 +193,11 @@ def test_business_store_round_trips_scheduled_tasks_and_runs():
             assert updated is not None
             assert updated.status is ScheduledTaskStatus.PAUSED
             assert await store.update_scheduled_task(task.id, user_id="user-2", status=ScheduledTaskStatus.DISABLED) is None
+
+            assert await store.delete_scheduled_task(task.id, user_id="user-2") is False
+            assert await store.delete_scheduled_task(task.id, user_id="user-1") is True
+            assert await store.get_scheduled_task(task.id) is None
+            assert await store.list_scheduled_task_runs(task_id=task.id, user_id="user-1") == []
 
     asyncio.run(run_test())
 

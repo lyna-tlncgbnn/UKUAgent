@@ -12,7 +12,11 @@ endpoints.
 - All routes require the current authenticated user and business storage.
 - Task reads, updates, pause/resume, delete, run-now, and run history are scoped
   to the current user.
-- Delete uses soft deletion by setting task status to `disabled`.
+- Delete is a hard delete: the task row is removed from `scheduled_tasks`, and
+  its rows are removed from `scheduled_task_runs`.
+- Delete also best-effort removes execution threads referenced by the task runs
+  from business thread metadata, Gateway listing storage, checkpointer data, and
+  local thread files.
 
 ## Interfaces
 
@@ -20,7 +24,8 @@ endpoints.
 - `POST /api/scheduled-tasks`
 - `GET /api/scheduled-tasks/{task_id}`
 - `PUT /api/scheduled-tasks/{task_id}`
-- `DELETE /api/scheduled-tasks/{task_id}`
+- `DELETE /api/scheduled-tasks/{task_id}` returns `204 No Content` and is
+  idempotent from the current user's perspective.
 - `POST /api/scheduled-tasks/{task_id}/pause`
 - `POST /api/scheduled-tasks/{task_id}/resume`
 - `POST /api/scheduled-tasks/{task_id}/run-now`

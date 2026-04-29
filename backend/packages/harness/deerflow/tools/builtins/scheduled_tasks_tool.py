@@ -177,8 +177,8 @@ def resume_scheduled_task(task_id: str, runtime: ToolRuntime) -> dict[str, Any]:
 
 
 @tool
-def delete_scheduled_task(task_id: str, runtime: ToolRuntime) -> dict[str, Any]:
-    """Disable one of the current user's scheduled tasks while keeping its run history."""
+def delete_scheduled_task(task_id: str, runtime: ToolRuntime) -> Any:
+    """Permanently delete one of the current user's scheduled tasks and its run history."""
 
     return _request("DELETE", f"/api/scheduled-tasks/{task_id}", runtime)
 
