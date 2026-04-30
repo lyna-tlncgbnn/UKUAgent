@@ -212,7 +212,6 @@ export const zhCN: Translations = {
   assets: {
     title: "文件",
     description: "管理上传文件、生成产物和组织共享的 agent 资产。",
-    internalOnly: "仅内部可见",
     loadError: "加载文件失败。",
     emptyTitle: "还没有文件",
     emptyDescription: "上传和生成的文件会出现在这里。",

@@ -224,7 +224,6 @@ export const enUS: Translations = {
   assets: {
     title: "Files",
     description: "Manage uploaded files, generated artifacts, and organization-shared agent assets.",
-    internalOnly: "Internal only",
     loadError: "Failed to load files.",
     emptyTitle: "No files yet",
     emptyDescription: "Uploaded and generated files will appear here.",

@@ -161,7 +161,6 @@ export interface Translations {
   assets: {
     title: string;
     description: string;
-    internalOnly: string;
     loadError: string;
     emptyTitle: string;
     emptyDescription: string;

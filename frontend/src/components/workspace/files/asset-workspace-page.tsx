@@ -238,7 +238,7 @@ function AssetActionsMenu({
             <span>{t.common.preview}</span>
           </DropdownMenuItem>
         )}
-        {asset.thread_id && (
+        {asset.thread_id && !asset.task_id && (
           <DropdownMenuItem asChild>
             <Link href={`/workspace/chats/${asset.thread_id}`}>
               <ExternalLinkIcon />
@@ -301,7 +301,7 @@ function AssetPreviewDialog({
 
   return (
     <Dialog open={!!asset} onOpenChange={onOpenChange}>
-      <DialogContent className="flex h-[86vh] max-w-[min(1120px,calc(100vw-2rem))] flex-col gap-0 p-0">
+      <DialogContent className="flex h-[90vh] !w-[90vw] !max-w-[90vw] sm:!max-w-[90vw] flex-col gap-0 p-0">
         {asset && (
           <>
             <DialogHeader className="shrink-0 border-b px-5 py-4 pr-12">
@@ -348,12 +348,11 @@ export function AssetWorkspacePage() {
       <WorkspaceBody>
         <div className="flex size-full flex-col">
           <header className="flex shrink-0 items-center justify-center pt-8">
-            <div className="flex w-full max-w-(--container-width-lg) items-center justify-between">
+            <div className="w-full max-w-(--container-width-lg)">
               <div>
                 <h1 className="text-2xl font-semibold">{t.assets.title}</h1>
                 <p className="text-muted-foreground mt-1 text-sm">{t.assets.description}</p>
               </div>
-              <Badge variant="secondary">{t.assets.internalOnly}</Badge>
             </div>
           </header>
           <main className="min-h-0 flex-1">
