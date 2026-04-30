@@ -56,6 +56,11 @@ def test_business_store_round_trips_user_thread_memory_and_file():
             assert user.id == "user-1"
             assert user.role.value == "member"
 
+            await store.upsert_user("user-1", email="user1@example.com", name="User One", wecom_userid="10300090")
+            fetched_by_wecom = await store.get_user_by_wecom_userid("10300090")
+            assert fetched_by_wecom is not None
+            assert fetched_by_wecom.id == "user-1"
+
             thread = await store.create_thread("thread-1", user_id="user-1", title="Test Thread")
             assert thread.id == "thread-1"
             assert thread.user_id == "user-1"

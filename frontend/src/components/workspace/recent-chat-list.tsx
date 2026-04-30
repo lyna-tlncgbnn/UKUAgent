@@ -2,6 +2,7 @@
 
 import {
   Download,
+  Eraser,
   FileJson,
   FileText,
   MoreHorizontal,
@@ -11,7 +12,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { useParams, usePathname, useRouter } from "next/navigation";
-import { useCallback, useState } from "react";
+import { type MouseEvent, useCallback, useState } from "react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -50,6 +51,8 @@ import {
 } from "@/core/threads/export";
 import {
   useDeleteThread,
+  useClearWecomThread,
+  useOpenWecomThread,
   useRenameThread,
   useThreads,
 } from "@/core/threads/hooks";
@@ -70,6 +73,8 @@ export function RecentChatList() {
   } = useThreads();
   const { mutate: deleteThread } = useDeleteThread();
   const { mutate: renameThread } = useRenameThread();
+  const { mutate: clearWecomThread } = useClearWecomThread();
+  const { mutate: openWecomThread } = useOpenWecomThread();
 
   // Rename dialog state
   const [renameDialogOpen, setRenameDialogOpen] = useState(false);
@@ -112,6 +117,38 @@ export function RecentChatList() {
       setRenameValue("");
     }
   }, [renameThread, renameThreadId, renameValue]);
+
+  const handleClearWecomThread = useCallback(
+    (threadId: string) => {
+      clearWecomThread(undefined, {
+        onSuccess() {
+          toast.success(t.sidebar.clearChatHistorySuccess);
+          if (threadId === threadIdFromPath) {
+            window.location.reload();
+          }
+        },
+        onError(error) {
+          toast.error(error instanceof Error ? error.message : "Failed to clear chat history");
+        },
+      });
+    },
+    [clearWecomThread, t.sidebar.clearChatHistorySuccess, threadIdFromPath],
+  );
+
+  const handleOpenWecomThread = useCallback(
+    (event: MouseEvent<HTMLAnchorElement>) => {
+      event.preventDefault();
+      openWecomThread(undefined, {
+        onSuccess(data) {
+          router.push(`/workspace/chats/${data.thread_id}`);
+        },
+        onError(error) {
+          toast.error(error instanceof Error ? error.message : "Failed to open WeCom chat");
+        },
+      });
+    },
+    [openWecomThread, router],
+  );
 
   const handleShare = useCallback(
     async (threadId: string) => {
@@ -207,6 +244,7 @@ export function RecentChatList() {
             <div className="flex w-full flex-col gap-1">
               {threads.map((thread) => {
                 const isActive = pathOfThread(thread.thread_id) === pathname;
+                const isWecomThread = thread.metadata?.source === "wecom";
                 return (
                   <SidebarMenuItem
                     key={thread.thread_id}
@@ -217,6 +255,7 @@ export function RecentChatList() {
                         <Link
                           className="text-muted-foreground block w-full whitespace-nowrap group-hover/side-menu-item:overflow-hidden"
                           href={pathOfThread(thread.thread_id)}
+                          onClick={isWecomThread ? handleOpenWecomThread : undefined}
                         >
                           {titleOfThread(thread)}
                         </Link>
@@ -236,17 +275,19 @@ export function RecentChatList() {
                               side={"right"}
                               align={"start"}
                             >
-                              <DropdownMenuItem
-                                onSelect={() =>
-                                  handleRenameClick(
-                                    thread.thread_id,
-                                    titleOfThread(thread),
-                                  )
-                                }
-                              >
-                                <Pencil className="text-muted-foreground" />
-                                <span>{t.common.rename}</span>
-                              </DropdownMenuItem>
+                              {!isWecomThread && (
+                                <DropdownMenuItem
+                                  onSelect={() =>
+                                    handleRenameClick(
+                                      thread.thread_id,
+                                      titleOfThread(thread),
+                                    )
+                                  }
+                                >
+                                  <Pencil className="text-muted-foreground" />
+                                  <span>{t.common.rename}</span>
+                                </DropdownMenuItem>
+                              )}
                               <DropdownMenuItem
                                 onSelect={() => handleShare(thread.thread_id)}
                               >
@@ -278,12 +319,21 @@ export function RecentChatList() {
                                 </DropdownMenuSubContent>
                               </DropdownMenuSub>
                               <DropdownMenuSeparator />
-                              <DropdownMenuItem
-                                onSelect={() => handleDelete(thread.thread_id)}
-                              >
-                                <Trash2 className="text-muted-foreground" />
-                                <span>{t.common.delete}</span>
-                              </DropdownMenuItem>
+                              {isWecomThread ? (
+                                <DropdownMenuItem
+                                  onSelect={() => handleClearWecomThread(thread.thread_id)}
+                                >
+                                  <Eraser className="text-muted-foreground" />
+                                  <span>{t.sidebar.clearChatHistory}</span>
+                                </DropdownMenuItem>
+                              ) : (
+                                <DropdownMenuItem
+                                  onSelect={() => handleDelete(thread.thread_id)}
+                                >
+                                  <Trash2 className="text-muted-foreground" />
+                                  <span>{t.common.delete}</span>
+                                </DropdownMenuItem>
+                              )}
                             </DropdownMenuContent>
                           </DropdownMenu>
                         )}

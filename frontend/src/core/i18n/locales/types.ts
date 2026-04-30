@@ -115,6 +115,9 @@ export interface Translations {
     demoChats: string;
     agents: string;
     scheduledTasks: string;
+    wecomChat: string;
+    clearChatHistory: string;
+    clearChatHistorySuccess: string;
   };
 
   // Agents

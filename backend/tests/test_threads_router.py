@@ -113,6 +113,20 @@ def test_delete_thread_route_cleans_thread_directory(tmp_path):
     assert not thread_dir.exists()
 
 
+def test_delete_thread_route_rejects_wecom_thread(tmp_path):
+    class WecomBusinessStore(FakeBusinessStore):
+        async def get_thread(self, thread_id: str):
+            return type("ThreadRecord", (), {"id": thread_id, "user_id": "user-1", "source": "wecom"})()
+
+    app = _build_thread_app(user_id="user-1", business_store=WecomBusinessStore())
+
+    with TestClient(app) as client:
+        response = client.delete("/api/threads/wecom-thread")
+
+    assert response.status_code == 400
+    assert "cannot be deleted" in response.json()["detail"]
+
+
 def test_delete_thread_route_rejects_invalid_thread_id(tmp_path):
     paths = Paths(tmp_path)
 

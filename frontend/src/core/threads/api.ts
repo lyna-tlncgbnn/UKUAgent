@@ -13,6 +13,11 @@ type ThreadCreateResponse = {
   thread_id: string;
 };
 
+type WecomThreadResponse = {
+  thread_id: string;
+  title: string;
+};
+
 async function readErrorDetail(response: Response, fallback: string) {
   const error = await response.json().catch(() => ({ detail: fallback }));
   return error.detail ?? fallback;
@@ -55,4 +60,26 @@ export async function searchThreads(
   }
 
   return response.json() as Promise<AgentThread[]>;
+}
+
+export async function getOrCreateWecomThread(): Promise<WecomThreadResponse> {
+  const response = await fetch(`${getBackendBaseURL()}/api/channels/wecom/thread`);
+
+  if (!response.ok) {
+    throw new Error(await readErrorDetail(response, "Failed to open WeCom thread"));
+  }
+
+  return response.json() as Promise<WecomThreadResponse>;
+}
+
+export async function clearWecomThread(): Promise<WecomThreadResponse> {
+  const response = await fetch(`${getBackendBaseURL()}/api/channels/wecom/thread/clear`, {
+    method: "POST",
+  });
+
+  if (!response.ok) {
+    throw new Error(await readErrorDetail(response, "Failed to clear WeCom thread"));
+  }
+
+  return response.json() as Promise<WecomThreadResponse>;
 }

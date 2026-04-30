@@ -17,7 +17,7 @@ import { useUpdateSubtask } from "../tasks/context";
 import type { UploadedFileInfo } from "../uploads";
 import { uploadFiles } from "../uploads";
 
-import { createThread, searchThreads } from "./api";
+import { clearWecomThread, createThread, getOrCreateWecomThread, searchThreads } from "./api";
 import type { AgentThread, AgentThreadState } from "./types";
 
 export type ToolEndEvent = {
@@ -565,6 +565,44 @@ export function useRenameThread() {
           });
         },
       );
+    },
+  });
+}
+
+export function useOpenWecomThread() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async () => {
+      const wecomThread = await getOrCreateWecomThread();
+
+      // The sidebar endpoint registers ownership in the Gateway business store,
+      // while the chat stream itself talks to LangGraph Server. Create the same
+      // fixed thread there before the chat page mounts or the first send will
+      // fail with "Thread or assistant not found."
+      await getAPIClient().threads.create({
+        threadId: wecomThread.thread_id,
+        graphId: "lead_agent",
+        metadata: {
+          source: "wecom",
+          title: wecomThread.title,
+        },
+        ifExists: "do_nothing",
+      });
+
+      return wecomThread;
+    },
+    onSuccess() {
+      void queryClient.invalidateQueries({ queryKey: ["threads", "search"] });
+    },
+  });
+}
+
+export function useClearWecomThread() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: clearWecomThread,
+    onSuccess() {
+      void queryClient.invalidateQueries({ queryKey: ["threads", "search"] });
     },
   });
 }

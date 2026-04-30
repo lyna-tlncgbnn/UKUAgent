@@ -222,7 +222,9 @@ async def delete_thread_data(thread_id: str, request: Request) -> ThreadDeleteRe
     Cleans DeerFlow-managed thread directories, removes checkpoint data,
     and removes the thread record from the Store.
     """
-    await require_owned_thread(request, thread_id)
+    thread = await require_owned_thread(request, thread_id)
+    if thread is not None and getattr(thread, "source", None) == "wecom":
+        raise HTTPException(status_code=400, detail="WeCom thread cannot be deleted. Clear its chat history instead.")
 
     # Clean local filesystem
     response = _delete_thread_data(thread_id)
@@ -565,7 +567,9 @@ async def update_thread_state(thread_id: str, body: ThreadStateUpdateRequest, re
     channel values, then syncs any updated ``title`` field back to the Store
     so that ``/threads/search`` reflects the change immediately.
     """
-    await require_owned_thread(request, thread_id)
+    thread = await require_owned_thread(request, thread_id)
+    if thread is not None and getattr(thread, "source", None) == "wecom" and body.values and "title" in body.values:
+        raise HTTPException(status_code=400, detail="WeCom thread title cannot be changed.")
     checkpointer = get_checkpointer(request)
     store = get_store(request)
 

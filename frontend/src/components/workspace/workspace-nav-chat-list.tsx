@@ -1,8 +1,9 @@
 "use client";
 
-import { BotIcon, CalendarClockIcon, MessagesSquare } from "lucide-react";
+import { BotIcon, CalendarClockIcon, MessageCircle, MessagesSquare } from "lucide-react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
+import { toast } from "sonner";
 
 import {
   SidebarGroup,
@@ -11,10 +12,26 @@ import {
   SidebarMenuItem,
 } from "@/components/ui/sidebar";
 import { useI18n } from "@/core/i18n/hooks";
+import { useOpenWecomThread } from "@/core/threads/hooks";
 
 export function WorkspaceNavChatList() {
   const { t } = useI18n();
   const pathname = usePathname();
+  const router = useRouter();
+  const { mutate: openWecomThread, isPending: isOpeningWecomThread } =
+    useOpenWecomThread();
+
+  const handleOpenWecomThread = () => {
+    openWecomThread(undefined, {
+      onSuccess(data) {
+        router.push(`/workspace/chats/${data.thread_id}`);
+      },
+      onError(error) {
+        toast.error(error instanceof Error ? error.message : "Failed to open WeCom chat");
+      },
+    });
+  };
+
   return (
     <SidebarGroup className="pt-1">
       <SidebarMenu>
@@ -46,6 +63,15 @@ export function WorkspaceNavChatList() {
               <CalendarClockIcon />
               <span>{t.sidebar.scheduledTasks}</span>
             </Link>
+          </SidebarMenuButton>
+        </SidebarMenuItem>
+        <SidebarMenuItem>
+          <SidebarMenuButton
+            disabled={isOpeningWecomThread}
+            onClick={handleOpenWecomThread}
+          >
+            <MessageCircle />
+            <span>{t.sidebar.wecomChat}</span>
           </SidebarMenuButton>
         </SidebarMenuItem>
       </SidebarMenu>

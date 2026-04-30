@@ -5,6 +5,7 @@ from contextlib import asynccontextmanager
 from datetime import datetime
 
 from sqlalchemy import delete, or_, select
+from sqlalchemy import inspect, text
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker, create_async_engine
 
 from deerflow.config.app_config import get_app_config
@@ -33,6 +34,23 @@ from .models import (
 )
 
 
+def _migrate_business_schema(sync_conn) -> None:
+    """Apply small additive migrations for deployments using create_all."""
+
+    inspector = inspect(sync_conn)
+    table_names = set(inspector.get_table_names())
+    if "users" not in table_names:
+        return
+
+    user_columns = {column["name"] for column in inspector.get_columns("users")}
+    if "wecom_userid" not in user_columns:
+        sync_conn.execute(text("ALTER TABLE users ADD COLUMN wecom_userid VARCHAR(255)"))
+
+    index_names = {index["name"] for index in inspector.get_indexes("users")}
+    if "ix_users_wecom_userid_unique" not in index_names:
+        sync_conn.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS ix_users_wecom_userid_unique ON users (wecom_userid)"))
+
+
 class BusinessStore:
     """Async persistence wrapper for multi-user business metadata."""
 
@@ -46,6 +64,7 @@ class BusinessStore:
             return
         async with self.engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)
+            await conn.run_sync(_migrate_business_schema)
 
     async def close(self) -> None:
         await self.engine.dispose()
@@ -63,17 +82,20 @@ class BusinessStore:
         name: str,
         role: UserRole = UserRole.MEMBER,
         status: UserStatus = UserStatus.ACTIVE,
+        wecom_userid: str | None = None,
     ) -> UserRecord:
         async with self.session() as session:
             record = await session.get(UserRecord, user_id)
             if record is None:
-                record = UserRecord(id=user_id, email=email, name=name, role=role, status=status)
+                record = UserRecord(id=user_id, email=email, name=name, role=role, status=status, wecom_userid=wecom_userid)
                 session.add(record)
             else:
                 record.email = email
                 record.name = name
                 record.role = role
                 record.status = status
+                if wecom_userid is not None:
+                    record.wecom_userid = wecom_userid
             await session.commit()
             await session.refresh(record)
             return record
@@ -81,6 +103,11 @@ class BusinessStore:
     async def get_user(self, user_id: str) -> UserRecord | None:
         async with self.session() as session:
             return await session.get(UserRecord, user_id)
+
+    async def get_user_by_wecom_userid(self, wecom_userid: str) -> UserRecord | None:
+        async with self.session() as session:
+            result = await session.execute(select(UserRecord).where(UserRecord.wecom_userid == wecom_userid))
+            return result.scalar_one_or_none()
 
     async def create_thread(
         self,
@@ -120,6 +147,19 @@ class BusinessStore:
             result = await session.execute(select(ThreadRecord).where(ThreadRecord.user_id == user_id).order_by(ThreadRecord.updated_at.desc()))
             return list(result.scalars().all())
 
+    async def get_thread_for_user_by_source(self, user_id: str, source: str) -> ThreadRecord | None:
+        async with self.session() as session:
+            result = await session.execute(
+                select(ThreadRecord)
+                .where(
+                    ThreadRecord.user_id == user_id,
+                    ThreadRecord.source == source,
+                )
+                .order_by(ThreadRecord.updated_at.desc())
+                .limit(1)
+            )
+            return result.scalar_one_or_none()
+
     async def delete_thread(self, thread_id: str, *, user_id: str | None = None) -> bool:
         async with self.session() as session:
             record = await session.get(ThreadRecord, thread_id)
@@ -131,6 +171,16 @@ class BusinessStore:
             await session.delete(record)
             await session.commit()
             return True
+
+    async def delete_thread_files(self, thread_id: str, *, user_id: str | None = None) -> int:
+        async with self.session() as session:
+            if user_id is not None:
+                record = await session.get(ThreadRecord, thread_id)
+                if record is None or record.user_id != user_id:
+                    return 0
+            result = await session.execute(delete(ThreadFileRecord).where(ThreadFileRecord.thread_id == thread_id))
+            await session.commit()
+            return int(result.rowcount or 0)
 
     async def record_thread_file(
         self,

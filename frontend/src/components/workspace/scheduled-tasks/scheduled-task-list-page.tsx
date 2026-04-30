@@ -1,7 +1,7 @@
 "use client";
 
 import { CalendarClockIcon } from "lucide-react";
-import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 
 import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty";
@@ -15,6 +15,7 @@ import { NewTaskDialog } from "./new-task-dialog";
 import { TASK_STATUS_COLORS, TASK_STATUS_LABELS, scheduleLabel, taskTimeHint } from "./lib";
 
 export function ScheduledTasksPage() {
+  const router = useRouter();
   const { tasks, isLoading, error } = useScheduledTasks();
   const [filter, setFilter] = useState("active");
   const [taskToDelete, setTaskToDelete] = useState<ScheduledTask | null>(null);
@@ -26,7 +27,7 @@ export function ScheduledTasksPage() {
 
   return (
     <main className="flex h-full min-w-0 flex-col">
-      <header className="border-b px-8 py-6">
+      <div className="mx-auto w-full max-w-(--container-width-md) px-6 pt-8 pb-4">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
             <h1 className="text-2xl font-semibold">定时任务</h1>
@@ -34,23 +35,21 @@ export function ScheduledTasksPage() {
           </div>
           <NewTaskDialog />
         </div>
-      </header>
+      </div>
 
-      <div className="min-h-0 flex-1 overflow-auto">
+      <div className="mx-auto w-full max-w-(--container-width-md) min-h-0 flex-1 overflow-auto px-6">
         {/* Filter tabs */}
-        <div className="px-8 pt-6">
-          <Tabs value={filter} onValueChange={setFilter}>
-            <TabsList variant="line">
-              <TabsTrigger value="active">活跃</TabsTrigger>
-              <TabsTrigger value="paused">已暂停</TabsTrigger>
-              <TabsTrigger value="completed">已完成</TabsTrigger>
-              <TabsTrigger value="all">全部</TabsTrigger>
-            </TabsList>
-          </Tabs>
-        </div>
+        <Tabs value={filter} onValueChange={setFilter}>
+          <TabsList variant="line">
+            <TabsTrigger value="active">活跃</TabsTrigger>
+            <TabsTrigger value="paused">已暂停</TabsTrigger>
+            <TabsTrigger value="completed">已完成</TabsTrigger>
+            <TabsTrigger value="all">全部</TabsTrigger>
+          </TabsList>
+        </Tabs>
 
         {/* Content */}
-        <div className="px-8 py-4">
+        <div className="py-4">
           {isLoading && <div className="text-muted-foreground text-sm">加载中...</div>}
           {error && <div className="text-destructive text-sm">加载定时任务失败。</div>}
           {!isLoading && filteredTasks.length === 0 && (
@@ -77,16 +76,15 @@ export function ScheduledTasksPage() {
                 <Item
                   key={task.id}
                   variant="outline"
-                  className="w-full rounded-lg transition-colors hover:bg-accent/50"
+                  className="w-full cursor-pointer rounded-lg transition-colors hover:bg-accent/50"
+                  onClick={() => router.push(`/workspace/scheduled-tasks/${task.id}`)}
                 >
                   <ItemMedia>
                     <span className={`size-2.5 shrink-0 rounded-full ${TASK_STATUS_COLORS[task.status]}`} />
                   </ItemMedia>
                   <ItemContent>
                     <ItemTitle>
-                      <Link href={`/workspace/scheduled-tasks/${task.id}`} className="hover:underline">
-                        {task.title}
-                      </Link>
+                      {task.title}
                       <span className="text-muted-foreground text-xs font-normal">
                         {TASK_STATUS_LABELS[task.status]}
                       </span>
@@ -95,7 +93,7 @@ export function ScheduledTasksPage() {
                       {[scheduleLabel(task), taskTimeHint(task), task.assistant_id].filter(Boolean).join(" · ")}
                     </ItemDescription>
                   </ItemContent>
-                  <ItemActions>
+                  <ItemActions onClick={(e: React.MouseEvent) => e.stopPropagation()}>
                     <TaskActionDropdown task={task} onDeleteRequest={() => setTaskToDelete(task)} />
                   </ItemActions>
                 </Item>

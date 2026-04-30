@@ -41,7 +41,13 @@ class ChannelService:
     instantiates enabled channels, and starts the ChannelManager dispatcher.
     """
 
-    def __init__(self, channels_config: dict[str, Any] | None = None) -> None:
+    def __init__(
+        self,
+        channels_config: dict[str, Any] | None = None,
+        *,
+        business_store: Any | None = None,
+        metadata_store: Any | None = None,
+    ) -> None:
         self.bus = MessageBus()
         self.store = ChannelStore()
         config = dict(channels_config or {})
@@ -56,13 +62,15 @@ class ChannelService:
             gateway_url=gateway_url,
             default_session=default_session if isinstance(default_session, dict) else None,
             channel_sessions=channel_sessions,
+            business_store=business_store,
+            metadata_store=metadata_store,
         )
         self._channels: dict[str, Any] = {}  # name -> Channel instance
         self._config = config
         self._running = False
 
     @classmethod
-    def from_app_config(cls) -> ChannelService:
+    def from_app_config(cls, *, business_store: Any | None = None, metadata_store: Any | None = None) -> ChannelService:
         """Create a ChannelService from the application config."""
         from deerflow.config.app_config import get_app_config
 
@@ -72,7 +80,7 @@ class ChannelService:
         extra = config.model_extra or {}
         if "channels" in extra:
             channels_config = extra["channels"]
-        return cls(channels_config=channels_config)
+        return cls(channels_config=channels_config, business_store=business_store, metadata_store=metadata_store)
 
     async def start(self) -> None:
         """Start the manager and all enabled channels."""
@@ -179,12 +187,12 @@ def get_channel_service() -> ChannelService | None:
     return _channel_service
 
 
-async def start_channel_service() -> ChannelService:
+async def start_channel_service(*, business_store: Any | None = None, metadata_store: Any | None = None) -> ChannelService:
     """Create and start the global ChannelService from app config."""
     global _channel_service
     if _channel_service is not None:
         return _channel_service
-    _channel_service = ChannelService.from_app_config()
+    _channel_service = ChannelService.from_app_config(business_store=business_store, metadata_store=metadata_store)
     await _channel_service.start()
     return _channel_service
 

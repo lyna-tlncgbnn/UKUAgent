@@ -29,6 +29,7 @@ Completed:
 - Step 06C: thread list closure
 - Step 06D: upload closure
 - Step 06E: user provisioning
+- Step 06F: WeCom fixed thread
 
 Next:
 
@@ -59,6 +60,7 @@ Next:
 - [Step 06C - Thread List Closure](D:\Project\deer-flow2\docs\multi-user-server\step-06c-thread-list-closure.md)
 - [Step 06D - Upload Closure](D:\Project\deer-flow2\docs\multi-user-server\step-06d-upload-closure.md)
 - [Step 06E - User Provisioning](D:\Project\deer-flow2\docs\multi-user-server\step-06e-user-provisioning.md)
+- [Step 06F - WeCom Fixed Thread](D:\Project\deer-flow2\docs\multi-user-server\step-06f-wecom-fixed-thread.md)
 
 ## Current Known Boundaries
 

@@ -164,6 +164,9 @@ export const zhCN: Translations = {
     demoChats: "演示对话",
     agents: "智能体",
     scheduledTasks: "定时任务",
+    wecomChat: "企微对话",
+    clearChatHistory: "清空聊天记录",
+    clearChatHistorySuccess: "聊天记录已清空",
   },
 
   // Agents

@@ -26,6 +26,8 @@ logger = logging.getLogger(__name__)
 DEFAULT_LANGGRAPH_URL = "http://localhost:2024"
 DEFAULT_GATEWAY_URL = "http://localhost:8001"
 DEFAULT_ASSISTANT_ID = "lead_agent"
+WECOM_THREAD_TITLE = "企微对话"
+WECOM_UNBOUND_MESSAGE = "未绑定企业微信账号，请联系管理员绑定工号。"
 CUSTOM_AGENT_NAME_PATTERN = re.compile(r"^[A-Za-z0-9-]+$")
 
 DEFAULT_RUN_CONFIG: dict[str, Any] = {"recursion_limit": 100}
@@ -529,6 +531,8 @@ class ChannelManager:
         assistant_id: str = DEFAULT_ASSISTANT_ID,
         default_session: dict[str, Any] | None = None,
         channel_sessions: dict[str, Any] | None = None,
+        business_store: Any | None = None,
+        metadata_store: Any | None = None,
     ) -> None:
         self.bus = bus
         self.store = store
@@ -538,6 +542,8 @@ class ChannelManager:
         self._assistant_id = assistant_id
         self._default_session = _as_dict(default_session)
         self._channel_sessions = dict(channel_sessions or {})
+        self._business_store = business_store
+        self._metadata_store = metadata_store
         self._client = None  # lazy init — langgraph_sdk async client
         self._semaphore: asyncio.Semaphore | None = None
         self._running = False
@@ -673,7 +679,76 @@ class ChannelManager:
 
     # -- chat handling -----------------------------------------------------
 
-    async def _create_thread(self, client, msg: InboundMessage) -> str:
+    async def _resolve_wecom_project_user_id(self, msg: InboundMessage) -> str | None:
+        if msg.channel_name != "wecom" or self._business_store is None:
+            return None
+        user = await self._business_store.get_user_by_wecom_userid(msg.user_id)
+        return user.id if user is not None else ""
+
+    async def _sync_business_thread(
+        self,
+        thread_id: str,
+        msg: InboundMessage,
+        *,
+        project_user_id: str | None,
+    ) -> None:
+        if self._business_store is None or not project_user_id:
+            return
+        try:
+            await self._business_store.create_thread(
+                thread_id,
+                user_id=project_user_id,
+                title=WECOM_THREAD_TITLE if msg.channel_name == "wecom" else None,
+                source=msg.channel_name,
+                source_user_id=msg.user_id,
+            )
+        except Exception:
+            logger.warning("[Manager] failed to sync business thread metadata for %s", thread_id, exc_info=True)
+
+    async def _sync_metadata_thread(self, thread_id: str, msg: InboundMessage) -> None:
+        if self._metadata_store is None or msg.channel_name != "wecom":
+            return
+        try:
+            from app.gateway.routers.threads import _store_upsert
+
+            await _store_upsert(
+                self._metadata_store,
+                thread_id,
+                metadata={"source": "wecom"},
+                values={"title": WECOM_THREAD_TITLE},
+            )
+        except Exception:
+            logger.warning("[Manager] failed to sync thread store metadata for %s", thread_id, exc_info=True)
+
+    @staticmethod
+    def _apply_project_user_to_run(
+        run_config: dict[str, Any],
+        run_context: dict[str, Any],
+        project_user_id: str | None,
+    ) -> None:
+        if not project_user_id:
+            return
+        run_context["user_id"] = project_user_id
+
+    @staticmethod
+    def _prefer_context_over_configurable(
+        run_config: dict[str, Any],
+        run_context: dict[str, Any],
+    ) -> None:
+        """Avoid LangGraph Server 0.6+ rejecting payloads with both fields.
+
+        Channel config historically allowed values under config.configurable.
+        LangGraph now requires runtime context to be sent through `context`
+        when `context` is present, so preserve those values by moving them.
+        """
+
+        configurable = run_config.pop("configurable", None)
+        if not isinstance(configurable, dict):
+            return
+        for key, value in configurable.items():
+            run_context.setdefault(key, value)
+
+    async def _create_thread(self, client, msg: InboundMessage, *, project_user_id: str | None = None) -> str:
         """Create a new thread on the LangGraph Server and store the mapping."""
         thread = await client.threads.create()
         thread_id = thread["thread_id"]
@@ -684,23 +759,52 @@ class ChannelManager:
             topic_id=msg.topic_id,
             user_id=msg.user_id,
         )
+        await self._sync_business_thread(thread_id, msg, project_user_id=project_user_id)
+        await self._sync_metadata_thread(thread_id, msg)
         logger.info("[Manager] new thread created on LangGraph Server: thread_id=%s for chat_id=%s topic_id=%s", thread_id, msg.chat_id, msg.topic_id)
         return thread_id
 
     async def _handle_chat(self, msg: InboundMessage, extra_context: dict[str, Any] | None = None) -> None:
         client = self._get_client()
+        project_user_id = await self._resolve_wecom_project_user_id(msg)
+        if project_user_id == "":
+            logger.info("[Manager] unbound WeCom user: %s", msg.user_id)
+            await self.bus.publish_outbound(
+                OutboundMessage(
+                    channel_name=msg.channel_name,
+                    chat_id=msg.chat_id,
+                    thread_id="",
+                    text=WECOM_UNBOUND_MESSAGE,
+                    thread_ts=msg.thread_ts,
+                )
+            )
+            return
 
         # Look up existing DeerFlow thread.
         # topic_id may be None (e.g. Telegram private chats) — the store
         # handles this by using the "channel:chat_id" key without a topic suffix.
         thread_id = self.store.get_thread_id(msg.channel_name, msg.chat_id, topic_id=msg.topic_id)
+        if thread_id is None and msg.channel_name == "wecom" and project_user_id and self._business_store is not None:
+            existing_wecom_thread = await self._business_store.get_thread_for_user_by_source(project_user_id, "wecom")
+            if existing_wecom_thread is not None:
+                thread_id = existing_wecom_thread.id
+                self.store.set_thread_id(
+                    msg.channel_name,
+                    msg.chat_id,
+                    thread_id,
+                    topic_id=msg.topic_id,
+                    user_id=msg.user_id,
+                )
         had_existing_thread = thread_id is not None
         if thread_id:
             logger.info("[Manager] reusing thread: thread_id=%s for topic_id=%s", thread_id, msg.topic_id)
 
         # No existing thread found — create a new one
         if thread_id is None:
-            thread_id = await self._create_thread(client, msg)
+            thread_id = await self._create_thread(client, msg, project_user_id=project_user_id)
+        else:
+            await self._sync_business_thread(thread_id, msg, project_user_id=project_user_id)
+            await self._sync_metadata_thread(thread_id, msg)
 
         materialized_files, file_notes = await _materialize_inbound_files(thread_id, msg.files)
         if materialized_files:
@@ -712,6 +816,8 @@ class ChannelManager:
         assistant_id, run_config, run_context = self._resolve_run_params(msg, thread_id)
         if extra_context:
             run_context.update(extra_context)
+        self._apply_project_user_to_run(run_config, run_context, project_user_id)
+        self._prefer_context_over_configurable(run_config, run_context)
         if self._channel_supports_streaming(msg.channel_name):
             try:
                 await self._handle_streaming_chat(
@@ -734,7 +840,7 @@ class ChannelManager:
                     thread_id,
                 )
                 self.store.remove(msg.channel_name, msg.chat_id, topic_id=msg.topic_id)
-                thread_id = await self._create_thread(client, msg)
+                thread_id = await self._create_thread(client, msg, project_user_id=project_user_id)
                 materialized_files, file_notes = await _materialize_inbound_files(thread_id, msg.files)
                 if materialized_files:
                     msg.files = materialized_files
@@ -743,6 +849,8 @@ class ChannelManager:
                 assistant_id, run_config, run_context = self._resolve_run_params(msg, thread_id)
                 if extra_context:
                     run_context.update(extra_context)
+                self._apply_project_user_to_run(run_config, run_context, project_user_id)
+                self._prefer_context_over_configurable(run_config, run_context)
                 await self._handle_streaming_chat(
                     client,
                     msg,
@@ -774,7 +882,7 @@ class ChannelManager:
                 thread_id,
             )
             self.store.remove(msg.channel_name, msg.chat_id, topic_id=msg.topic_id)
-            thread_id = await self._create_thread(client, msg)
+            thread_id = await self._create_thread(client, msg, project_user_id=project_user_id)
             materialized_files, file_notes = await _materialize_inbound_files(thread_id, msg.files)
             if materialized_files:
                 msg.files = materialized_files
@@ -784,6 +892,8 @@ class ChannelManager:
             assistant_id, run_config, run_context = self._resolve_run_params(msg, thread_id)
             if extra_context:
                 run_context.update(extra_context)
+            self._apply_project_user_to_run(run_config, run_context, project_user_id)
+            self._prefer_context_over_configurable(run_config, run_context)
             logger.info("[Manager] retrying runs.wait with fresh thread_id=%s", thread_id)
             result = await client.runs.wait(
                 thread_id,

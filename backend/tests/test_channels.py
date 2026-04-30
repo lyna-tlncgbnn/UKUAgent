@@ -413,6 +413,39 @@ def _make_async_iterator(items):
     return iterator()
 
 
+class _MemoryMetadataStore:
+    def __init__(self):
+        self.records = {}
+
+    async def aget(self, namespace, key):
+        value = self.records.get(tuple(namespace), {}).get(key)
+        if value is None:
+            return None
+        return SimpleNamespace(value=value)
+
+    async def aput(self, namespace, key, value):
+        self.records.setdefault(tuple(namespace), {})[key] = value
+
+
+class _FakeBusinessStore:
+    def __init__(self, *, wecom_user=None, existing_thread=None):
+        self.wecom_user = wecom_user
+        self.existing_thread = existing_thread
+        self.created_threads = []
+
+    async def get_user_by_wecom_userid(self, wecom_userid):
+        return self.wecom_user
+
+    async def get_thread_for_user_by_source(self, user_id, source):
+        return self.existing_thread
+
+    async def create_thread(self, thread_id, *, user_id, title=None, source="web", source_user_id=None):
+        record = SimpleNamespace(id=thread_id, user_id=user_id, title=title, source=source, source_user_id=source_user_id)
+        self.created_threads.append(record)
+        self.existing_thread = record
+        return record
+
+
 class TestChannelManager:
     def test_handle_chat_creates_thread(self):
         from app.channels.manager import ChannelManager
@@ -2231,5 +2264,114 @@ class TestWecomMultimodalManager:
 
             mock_client.runs.stream.assert_called_once()
             mock_client.runs.wait.assert_not_called()
+
+        _run(go())
+
+    def test_wecom_message_resolves_project_user_and_syncs_fixed_thread(self, monkeypatch):
+        from app.channels.manager import ChannelManager, WECOM_THREAD_TITLE
+
+        monkeypatch.setattr("app.channels.manager.STREAM_UPDATE_MIN_INTERVAL_SECONDS", 0.0)
+
+        async def go():
+            base_dir = Path(tempfile.mkdtemp(dir=Path.cwd()))
+            bus = MessageBus()
+            store = ChannelStore(path=base_dir / "store.json")
+            business_store = _FakeBusinessStore(wecom_user=SimpleNamespace(id="project-user-1"))
+            metadata_store = _MemoryMetadataStore()
+            manager = ChannelManager(
+                bus=bus,
+                store=store,
+                business_store=business_store,
+                metadata_store=metadata_store,
+            )
+
+            outbound_received = []
+
+            async def capture_outbound(msg):
+                outbound_received.append(msg)
+
+            bus.subscribe_outbound(capture_outbound)
+
+            stream_events = [
+                _make_stream_part(
+                    "values",
+                    {
+                        "messages": [
+                            {"type": "human", "content": "hello"},
+                            {"type": "ai", "content": "stream done"},
+                        ],
+                        "artifacts": [],
+                    },
+                ),
+            ]
+
+            mock_client = _make_mock_langgraph_client(thread_id="thread-wecom-1")
+            mock_client.runs.stream = MagicMock(return_value=_make_async_iterator(stream_events))
+            manager._client = mock_client
+
+            await manager.start()
+            await bus.publish_inbound(
+                InboundMessage(
+                    channel_name="wecom",
+                    chat_id="user:10300090",
+                    user_id="10300090",
+                    text="hello",
+                    thread_ts="req-1",
+                )
+            )
+            await _wait_for(lambda: any(msg.is_final for msg in outbound_received))
+            await manager.stop()
+
+            mock_client.threads.create.assert_called_once()
+            call_args = mock_client.runs.stream.call_args
+            assert "configurable" not in call_args.kwargs["config"]
+            assert call_args.kwargs["context"]["user_id"] == "project-user-1"
+            assert business_store.created_threads[0].user_id == "project-user-1"
+            assert business_store.created_threads[0].source == "wecom"
+            assert business_store.created_threads[0].source_user_id == "10300090"
+            assert business_store.created_threads[0].title == WECOM_THREAD_TITLE
+            assert store.get_thread_id("wecom", "user:10300090") == "thread-wecom-1"
+            assert metadata_store.records[("threads",)]["thread-wecom-1"]["values"]["title"] == WECOM_THREAD_TITLE
+
+        _run(go())
+
+    def test_wecom_unbound_user_replies_without_creating_thread(self):
+        from app.channels.manager import ChannelManager, WECOM_UNBOUND_MESSAGE
+
+        async def go():
+            bus = MessageBus()
+            store = ChannelStore(path=Path(tempfile.mkdtemp()) / "store.json")
+            manager = ChannelManager(
+                bus=bus,
+                store=store,
+                business_store=_FakeBusinessStore(wecom_user=None),
+            )
+            mock_client = _make_mock_langgraph_client(thread_id="thread-ignored")
+            manager._client = mock_client
+
+            outbound_received = []
+
+            async def capture_outbound(msg):
+                outbound_received.append(msg)
+
+            bus.subscribe_outbound(capture_outbound)
+
+            await manager.start()
+            await bus.publish_inbound(
+                InboundMessage(
+                    channel_name="wecom",
+                    chat_id="user:10300091",
+                    user_id="10300091",
+                    text="hello",
+                    thread_ts="req-2",
+                )
+            )
+            await _wait_for(lambda: len(outbound_received) == 1)
+            await manager.stop()
+
+            assert outbound_received[0].text == WECOM_UNBOUND_MESSAGE
+            mock_client.threads.create.assert_not_called()
+            mock_client.runs.stream.assert_not_called()
+            assert store.get_thread_id("wecom", "user:10300091") is None
 
         _run(go())
