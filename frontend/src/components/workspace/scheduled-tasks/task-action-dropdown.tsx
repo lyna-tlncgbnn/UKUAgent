@@ -26,6 +26,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { useI18n } from "@/core/i18n/hooks";
 import {
   useDeleteScheduledTask,
   usePauseScheduledTask,
@@ -37,6 +38,8 @@ import type { ScheduledTask } from "@/core/scheduled-tasks";
 /* ─── TaskActionDropdown ─── */
 
 export function TaskActionDropdown({ task, onDeleteRequest }: { task: ScheduledTask; onDeleteRequest: () => void }) {
+  const { t } = useI18n();
+  const st = t.scheduledTasks;
   const pauseTask = usePauseScheduledTask();
   const resumeTask = useResumeScheduledTask();
   const runNow = useRunScheduledTaskNow();
@@ -46,7 +49,7 @@ export function TaskActionDropdown({ task, onDeleteRequest }: { task: ScheduledT
       await fn();
       toast.success(label);
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "操作失败");
+      toast.error(error instanceof Error ? error.message : st.operationFailed);
     }
   }
 
@@ -60,32 +63,32 @@ export function TaskActionDropdown({ task, onDeleteRequest }: { task: ScheduledT
       <DropdownMenuTrigger asChild>
         <Button variant="ghost" size="icon">
           <MoreHorizontalIcon className="size-4" />
-          <span className="sr-only">操作</span>
+          <span className="sr-only">{st.actions}</span>
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent className="w-48 rounded-lg" align="end">
         {showPause && (
-          <DropdownMenuItem onSelect={() => action("任务已暂停", () => pauseTask.mutateAsync(task.id))}>
+          <DropdownMenuItem onSelect={() => action(st.paused, () => pauseTask.mutateAsync(task.id))}>
             <CirclePauseIcon className="text-muted-foreground" />
-            <span>暂停</span>
+            <span>{st.pause}</span>
           </DropdownMenuItem>
         )}
         {showResume && (
-          <DropdownMenuItem onSelect={() => action("任务已恢复", () => resumeTask.mutateAsync(task.id))}>
+          <DropdownMenuItem onSelect={() => action(st.resumed, () => resumeTask.mutateAsync(task.id))}>
             <CirclePlayIcon className="text-muted-foreground" />
-            <span>恢复</span>
+            <span>{st.resume}</span>
           </DropdownMenuItem>
         )}
         {showRunNow && (
-          <DropdownMenuItem onSelect={() => action("已触发立即运行", () => runNow.mutateAsync(task.id))}>
+          <DropdownMenuItem onSelect={() => action(st.runNowTriggered, () => runNow.mutateAsync(task.id))}>
             <RefreshCwIcon className="text-muted-foreground" />
-            <span>立即运行</span>
+            <span>{st.runNow}</span>
           </DropdownMenuItem>
         )}
         {showSeparator && <DropdownMenuSeparator />}
         <DropdownMenuItem variant="destructive" onSelect={onDeleteRequest}>
           <Trash2Icon />
-          <span>删除</span>
+          <span>{st.delete}</span>
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
@@ -101,16 +104,18 @@ export function DeleteConfirmDialog({
   taskToDelete: ScheduledTask | null;
   onClear: () => void;
 }) {
+  const { t } = useI18n();
+  const st = t.scheduledTasks;
   const deleteTask = useDeleteScheduledTask();
 
   async function handleDelete() {
     if (!taskToDelete) return;
     try {
       await deleteTask.mutateAsync(taskToDelete.id);
-      toast.success("任务已删除");
+      toast.success(st.taskDeleted);
       onClear();
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "删除失败");
+      toast.error(error instanceof Error ? error.message : st.deleteFailed);
     }
   }
 
@@ -118,23 +123,23 @@ export function DeleteConfirmDialog({
     <Dialog open={taskToDelete !== null} onOpenChange={(open) => { if (!open) onClear(); }}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>确认删除</DialogTitle>
-          <DialogDescription>删除后无法恢复，确认要删除这个定时任务吗？</DialogDescription>
+          <DialogTitle>{st.deleteConfirmTitle}</DialogTitle>
+          <DialogDescription>{st.deleteConfirmDescription}</DialogDescription>
         </DialogHeader>
         {taskToDelete && (
           <div className="bg-muted rounded-md border p-3 text-sm">
-            <div className="text-muted-foreground mb-1 font-medium">任务名称</div>
+            <div className="text-muted-foreground mb-1 font-medium">{st.deleteTaskName}</div>
             <p className="break-words">{taskToDelete.title}</p>
           </div>
         )}
         <DialogFooter>
           <DialogClose asChild>
             <Button variant="outline" disabled={deleteTask.isPending}>
-              取消
+              {t.common.cancel}
             </Button>
           </DialogClose>
           <Button variant="destructive" onClick={handleDelete} disabled={deleteTask.isPending}>
-            {deleteTask.isPending ? "删除中..." : "删除"}
+            {deleteTask.isPending ? st.deleting : st.delete}
           </Button>
         </DialogFooter>
       </DialogContent>

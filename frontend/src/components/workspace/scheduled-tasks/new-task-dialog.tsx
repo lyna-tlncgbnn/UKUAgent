@@ -24,6 +24,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { useI18n } from "@/core/i18n/hooks";
 import { useCreateScheduledTask } from "@/core/scheduled-tasks";
 import type { CreateScheduledTaskRequest } from "@/core/scheduled-tasks";
 
@@ -42,6 +43,8 @@ function FormField({ label, hint, children }: { label: string; hint?: string; ch
 /* ─── NewTaskDialog ─── */
 
 export function NewTaskDialog() {
+  const { t } = useI18n();
+  const st = t.scheduledTasks;
   const [open, setOpen] = useState(false);
   const [scheduleType, setScheduleType] = useState<CreateScheduledTaskRequest["schedule_type"]>("cron");
   const createTask = useCreateScheduledTask();
@@ -62,11 +65,11 @@ export function NewTaskDialog() {
     };
     try {
       await createTask.mutateAsync(payload);
-      toast.success("定时任务已创建");
+      toast.success(st.taskCreated);
       formElement.reset();
       setOpen(false);
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "创建定时任务失败");
+      toast.error(error instanceof Error ? error.message : st.createFailed);
     }
   }
 
@@ -75,65 +78,65 @@ export function NewTaskDialog() {
       <DialogTrigger asChild>
         <Button>
           <PlusIcon className="size-4" />
-          新建任务
+          {st.newTask}
         </Button>
       </DialogTrigger>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle>新建定时任务</DialogTitle>
-          <DialogDescription>创建一个定时自动执行的 Agent 任务。</DialogDescription>
+          <DialogTitle>{st.createDialogTitle}</DialogTitle>
+          <DialogDescription>{st.createDialogDescription}</DialogDescription>
         </DialogHeader>
         <form className="grid gap-5" onSubmit={handleSubmit}>
-          <FormField label="任务名称" hint="为这个定时任务起一个容易辨识的名字">
-            <Input name="title" placeholder="例如：每日站会提醒" required />
+          <FormField label={st.taskNameLabel} hint={st.taskNameHint}>
+            <Input name="title" placeholder={st.taskNamePlaceholder} required />
           </FormField>
 
-          <FormField label="执行内容" hint="每次触发时发送给 Agent 的指令">
-            <Textarea name="prompt" placeholder="例如：现在是早上 9 点，请提醒团队开站会" required className="min-h-24" />
+          <FormField label={st.executionContentLabel} hint={st.executionContentHint}>
+            <Textarea name="prompt" placeholder={st.executionContentPlaceholder} required className="min-h-24" />
           </FormField>
 
-          <FormField label="智能体" hint="执行此任务的 Agent ID">
+          <FormField label={st.agentLabel} hint={st.agentHint}>
             <Input name="assistant_id" defaultValue="lead_agent" placeholder="lead_agent" />
           </FormField>
 
           <div className="space-y-3">
-            <div className="text-sm font-medium">调度配置</div>
+            <div className="text-sm font-medium">{st.scheduleConfigLabel}</div>
             <div className="grid gap-3 sm:grid-cols-2">
               <div className="space-y-1.5">
-                <div className="text-muted-foreground text-xs">调度类型</div>
+                <div className="text-muted-foreground text-xs">{st.scheduleTypeLabel}</div>
                 <Select value={scheduleType} onValueChange={(v) => setScheduleType(v as CreateScheduledTaskRequest["schedule_type"])}>
                   <SelectTrigger className="w-full">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="cron">Cron 表达式</SelectItem>
-                    <SelectItem value="interval">固定间隔</SelectItem>
-                    <SelectItem value="once">仅执行一次</SelectItem>
+                    <SelectItem value="cron">{st.scheduleCron}</SelectItem>
+                    <SelectItem value="interval">{st.scheduleInterval}</SelectItem>
+                    <SelectItem value="once">{st.scheduleOnce}</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
               <div className="space-y-1.5">
-                <div className="text-muted-foreground text-xs">时区</div>
+                <div className="text-muted-foreground text-xs">{st.timezoneLabel}</div>
                 <Input name="timezone" defaultValue="Asia/Shanghai" />
               </div>
             </div>
             {scheduleType === "cron" && (
               <div className="space-y-1.5">
-                <div className="text-muted-foreground text-xs">Cron 表达式</div>
+                <div className="text-muted-foreground text-xs">{st.cronExpressionLabel}</div>
                 <Input name="cron_expr" defaultValue="0 9 * * *" placeholder="0 9 * * *" />
-                <p className="text-muted-foreground text-xs">例如：0 9 * * * 表示每天 9:00 执行</p>
+                <p className="text-muted-foreground text-xs">{st.cronExpressionHint}</p>
               </div>
             )}
             {scheduleType === "interval" && (
               <div className="space-y-1.5">
-                <div className="text-muted-foreground text-xs">间隔时间（秒）</div>
+                <div className="text-muted-foreground text-xs">{st.intervalSecondsLabel}</div>
                 <Input name="interval_seconds" type="number" min={60} defaultValue={3600} />
-                <p className="text-muted-foreground text-xs">最小 60 秒，3600 = 每 1 小时</p>
+                <p className="text-muted-foreground text-xs">{st.intervalSecondsHint}</p>
               </div>
             )}
             {scheduleType === "once" && (
               <div className="space-y-1.5">
-                <div className="text-muted-foreground text-xs">执行时间</div>
+                <div className="text-muted-foreground text-xs">{st.executionTimeLabel}</div>
                 <Input name="run_at" type="datetime-local" required />
               </div>
             )}
@@ -141,7 +144,7 @@ export function NewTaskDialog() {
 
           <DialogFooter>
             <Button type="submit" disabled={createTask.isPending}>
-              {createTask.isPending ? "创建中..." : "创建任务"}
+              {createTask.isPending ? st.creating : st.createTask}
             </Button>
           </DialogFooter>
         </form>

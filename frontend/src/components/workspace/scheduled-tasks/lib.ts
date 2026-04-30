@@ -1,13 +1,16 @@
 import type { Message } from "@langchain/langgraph-sdk";
 import type { ScheduledTask, ScheduledTaskRun } from "@/core/scheduled-tasks";
+import type { Translations } from "@/core/i18n/locales/types";
+
+type ST = Translations["scheduledTasks"];
 
 /* ─── helpers ─── */
 
-export function formatDateTime(value: string | null, timeZone = "Asia/Shanghai") {
-  if (!value) return "未安排";
+export function formatDateTime(value: string | null, timeZone = "Asia/Shanghai", locale = "zh-CN", t?: ST) {
+  if (!value) return t?.notScheduled ?? "未安排";
   const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "未知时间";
-  return new Intl.DateTimeFormat("zh-CN", {
+  if (Number.isNaN(date.getTime())) return t?.unknownTime ?? "未知时间";
+  return new Intl.DateTimeFormat(locale, {
     timeZone,
     month: "2-digit",
     day: "2-digit",
@@ -16,12 +19,12 @@ export function formatDateTime(value: string | null, timeZone = "Asia/Shanghai")
   }).format(date);
 }
 
-export function messageRole(message: Message) {
+export function messageRole(message: Message, t: ST) {
   const type = "type" in message ? message.type : undefined;
-  if (type === "human") return "用户";
+  if (type === "human") return t.roleUser;
   if (type === "ai") return "Agent";
-  if (type === "tool") return "工具";
-  return type ?? "消息";
+  if (type === "tool") return t.roleTool;
+  return t.roleMessage;
 }
 
 export function messageText(message: Message) {
@@ -40,25 +43,25 @@ export function messageText(message: Message) {
   return "";
 }
 
-export function scheduleLabel(task: ScheduledTask) {
+export function scheduleLabel(task: ScheduledTask, t: ST) {
   if (task.schedule_type === "cron") return task.cron_expr ?? "Cron";
-  if (task.schedule_type === "interval") return `每 ${Math.round((task.interval_seconds ?? 0) / 60)} 分钟`;
-  return "一次性";
+  if (task.schedule_type === "interval") return t.scheduleLabelInterval.replace("{minutes}", String(Math.round((task.interval_seconds ?? 0) / 60)));
+  return t.scheduleLabelOnce;
 }
 
-export function scheduleTypeName(task: ScheduledTask) {
-  if (task.schedule_type === "cron") return "Cron";
-  if (task.schedule_type === "interval") return "间隔";
-  return "一次性";
+export function scheduleTypeName(task: ScheduledTask, t: ST) {
+  if (task.schedule_type === "cron") return t.scheduleTypeNameCron;
+  if (task.schedule_type === "interval") return t.scheduleTypeNameInterval;
+  return t.scheduleTypeNameOnce;
 }
 
 /** Smart time label: shows "下次 xxx" for active tasks, "上次 xxx" for completed/disabled, or nothing */
-export function taskTimeHint(task: ScheduledTask): string | null {
+export function taskTimeHint(task: ScheduledTask, t: ST, locale = "zh-CN"): string | null {
   if (task.next_run_at) {
-    return `下次 ${formatDateTime(task.next_run_at, task.timezone)}`;
+    return t.nextRunAt.replace("{time}", formatDateTime(task.next_run_at, task.timezone, locale, t));
   }
   if (task.last_run_at) {
-    return `上次 ${formatDateTime(task.last_run_at, task.timezone)}`;
+    return t.lastRunAt.replace("{time}", formatDateTime(task.last_run_at, task.timezone, locale, t));
   }
   return null;
 }
@@ -72,12 +75,14 @@ export const TASK_STATUS_COLORS: Record<ScheduledTask["status"], string> = {
   disabled: "bg-red-500",
 };
 
-export const TASK_STATUS_LABELS: Record<ScheduledTask["status"], string> = {
-  active: "活跃",
-  paused: "已暂停",
-  completed: "已完成",
-  disabled: "已禁用",
-};
+export function getTaskStatusLabels(t: ST): Record<ScheduledTask["status"], string> {
+  return {
+    active: t.statusActive,
+    paused: t.statusPaused,
+    completed: t.statusCompleted,
+    disabled: t.statusDisabled,
+  };
+}
 
 export const RUN_STATUS_COLORS: Record<ScheduledTaskRun["status"], string> = {
   success: "bg-emerald-500",

@@ -152,12 +152,107 @@ export interface Translations {
   breadcrumb: {
     workspace: string;
     chats: string;
+    agents: string;
+    scheduledTasks: string;
+  };
+
+  // Scheduled Tasks
+  scheduledTasks: {
+    title: string;
+    description: string;
+    newTask: string;
+    statusActive: string;
+    statusPaused: string;
+    statusCompleted: string;
+    statusDisabled: string;
+    tabAll: string;
+    scheduleCron: string;
+    scheduleInterval: string;
+    scheduleOnce: string;
+    scheduleTypeNameCron: string;
+    scheduleTypeNameInterval: string;
+    scheduleTypeNameOnce: string;
+    scheduleLabelInterval: string;
+    scheduleLabelOnce: string;
+    nextRunAt: string;
+    lastRunAt: string;
+    notScheduled: string;
+    unknownTime: string;
+    minutesShort: string;
+    loading: string;
+    loadError: string;
+    emptyTitle: string;
+    emptyDescription: string;
+    emptyFilteredTitle: string;
+    emptyFilteredDescription: string;
+    back: string;
+    tabOverview: string;
+    tabHistory: string;
+    tabConversation: string;
+    scheduleConfig: string;
+    scheduleType: string;
+    cronExpression: string;
+    intervalTime: string;
+    executionTime: string;
+    timezone: string;
+    agent: string;
+    taskContent: string;
+    executionSummary: string;
+    status: string;
+    nextExecution: string;
+    lastSuccess: string;
+    failureCount: string;
+    noExecutionRecords: string;
+    viewConversation: string;
+    noConversation: string;
+    selectRun: string;
+    loadingConversation: string;
+    loadConversationError: string;
+    noMessages: string;
+    roleUser: string;
+    roleTool: string;
+    roleMessage: string;
+    actions: string;
+    pause: string;
+    paused: string;
+    resume: string;
+    resumed: string;
+    runNow: string;
+    runNowTriggered: string;
+    delete: string;
+    deleteConfirmTitle: string;
+    deleteConfirmDescription: string;
+    deleteTaskName: string;
+    deleting: string;
+    deleteFailed: string;
+    taskDeleted: string;
+    operationFailed: string;
+    createTask: string;
+    creating: string;
+    createDialogTitle: string;
+    createDialogDescription: string;
+    taskNameLabel: string;
+    taskNameHint: string;
+    taskNamePlaceholder: string;
+    executionContentLabel: string;
+    executionContentHint: string;
+    executionContentPlaceholder: string;
+    agentLabel: string;
+    agentHint: string;
+    scheduleConfigLabel: string;
+    scheduleTypeLabel: string;
+    timezoneLabel: string;
+    cronExpressionLabel: string;
+    cronExpressionHint: string;
+    intervalSecondsLabel: string;
+    intervalSecondsHint: string;
+    executionTimeLabel: string;
+    taskCreated: string;
+    createFailed: string;
   };
 
   // Workspace
-  workspace: {
-    githubTooltip: string;
-  };
+  workspace: Record<string, never>;
 
   // Conversation
   conversation: {
