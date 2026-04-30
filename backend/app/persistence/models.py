@@ -90,6 +90,13 @@ class ScheduledTaskRunStatus(str, enum.Enum):
     CANCELLED = "cancelled"
 
 
+class ScheduledTaskRunNotificationStatus(str, enum.Enum):
+    PENDING = "pending"
+    SENT = "sent"
+    SKIPPED = "skipped"
+    ERROR = "error"
+
+
 class ScheduledTaskTriggerType(str, enum.Enum):
     SCHEDULE = "schedule"
     MANUAL = "manual"
@@ -332,6 +339,14 @@ class ScheduledTaskRunRecord(Base):
     trigger_type: Mapped[ScheduledTaskTriggerType] = mapped_column(Enum(ScheduledTaskTriggerType), default=ScheduledTaskTriggerType.SCHEDULE, nullable=False)
     error: Mapped[str | None] = mapped_column(Text, nullable=True)
     result_summary: Mapped[str | None] = mapped_column(Text, nullable=True)
+    notification_status: Mapped[ScheduledTaskRunNotificationStatus] = mapped_column(
+        Enum(ScheduledTaskRunNotificationStatus),
+        default=ScheduledTaskRunNotificationStatus.PENDING,
+        nullable=False,
+        index=True,
+    )
+    notification_error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    notified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at: Mapped[datetime] = mapped_column(

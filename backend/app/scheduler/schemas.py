@@ -8,6 +8,7 @@ from pydantic import BaseModel, Field
 from app.persistence import (
     ScheduledTaskConcurrencyPolicy,
     ScheduledTaskRecord,
+    ScheduledTaskRunNotificationStatus,
     ScheduledTaskRunRecord,
     ScheduledTaskRunStatus,
     ScheduledTaskScheduleType,
@@ -110,6 +111,9 @@ class ScheduledTaskRunResponse(BaseModel):
     trigger_type: str
     error: str | None
     result_summary: str | None
+    notification_status: str
+    notification_error: str | None
+    notified_at: datetime | None
     created_at: datetime
     updated_at: datetime
 
@@ -128,6 +132,9 @@ class ScheduledTaskRunResponse(BaseModel):
             trigger_type=record.trigger_type.value,
             error=record.error,
             result_summary=record.result_summary,
+            notification_status=record.notification_status.value,
+            notification_error=record.notification_error,
+            notified_at=_as_utc(record.notified_at),
             created_at=_as_utc(record.created_at),
             updated_at=_as_utc(record.updated_at),
         )
@@ -147,6 +154,7 @@ __all__ = [
     "ScheduledTaskConcurrencyPolicy",
     "ScheduledTaskCreateRequest",
     "ScheduledTaskRecord",
+    "ScheduledTaskRunNotificationStatus",
     "ScheduledTaskResponse",
     "ScheduledTaskRunResponse",
     "ScheduledTaskRunStatus",

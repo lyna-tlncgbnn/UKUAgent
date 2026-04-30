@@ -42,6 +42,9 @@ export type ScheduledTaskRun = {
   trigger_type: "schedule" | "manual" | "conversation";
   error: string | null;
   result_summary: string | null;
+  notification_status: "pending" | "sent" | "skipped" | "error";
+  notification_error: string | null;
+  notified_at: string | null;
   created_at: string;
   updated_at: string;
 };

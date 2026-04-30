@@ -13,6 +13,7 @@ from app.persistence import (
     AssetKind,
     AssetStatus,
     AssetVisibility,
+    ScheduledTaskRunNotificationStatus,
     ScheduledTaskRunStatus,
     ScheduledTaskScheduleType,
     ScheduledTaskStatus,
@@ -241,6 +242,8 @@ def test_business_store_round_trips_scheduled_tasks_and_runs():
             assert task.user_id == "user-1"
             assert task.status is ScheduledTaskStatus.ACTIVE
             assert task.next_run_at is not None
+            assert task.task_metadata["notification"]["enabled"] is True
+            assert task.task_metadata["notification"]["channel"] == "wecom"
 
             listed = await store.list_scheduled_tasks_for_user("user-1")
             assert [item.id for item in listed] == [task.id]
@@ -256,6 +259,16 @@ def test_business_store_round_trips_scheduled_tasks_and_runs():
             )
             assert run_record.task_id == task.id
             assert run_record.status is ScheduledTaskRunStatus.RUNNING
+            assert run_record.notification_status is ScheduledTaskRunNotificationStatus.PENDING
+
+            notified = await store.update_scheduled_task_run(
+                run_record.id,
+                notification_status=ScheduledTaskRunNotificationStatus.SENT,
+                notified_at=datetime.now(UTC),
+            )
+            assert notified is not None
+            assert notified.notification_status is ScheduledTaskRunNotificationStatus.SENT
+            assert notified.notified_at is not None
 
             runs = await store.list_scheduled_task_runs(task_id=task.id, user_id="user-1")
             assert [item.id for item in runs] == [run_record.id]

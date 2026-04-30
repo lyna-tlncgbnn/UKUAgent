@@ -20,6 +20,12 @@ from app.persistence import (
 from app.scheduler.schemas import ScheduledTaskCreateRequest, ScheduledTaskUpdateRequest
 
 DEFAULT_TIMEZONE = "Asia/Shanghai"
+DEFAULT_NOTIFICATION_CONFIG = {
+    "enabled": True,
+    "channel": "wecom",
+    "on": ["success", "error"],
+    "include_assets": True,
+}
 
 
 class SchedulerValidationError(ValueError):
@@ -42,6 +48,18 @@ def _ensure_aware(value: datetime, timezone: str) -> datetime:
     if value.tzinfo is None:
         value = value.replace(tzinfo=tz)
     return value.astimezone(UTC)
+
+
+def with_default_notification_metadata(metadata: dict | None) -> dict:
+    """Merge the default owner-only WeCom notification policy into task metadata."""
+
+    result = dict(metadata or {})
+    notification = result.get("notification")
+    if isinstance(notification, dict):
+        result["notification"] = {**DEFAULT_NOTIFICATION_CONFIG, **notification}
+    else:
+        result["notification"] = dict(DEFAULT_NOTIFICATION_CONFIG)
+    return result
 
 
 def compute_next_run_at(
@@ -122,7 +140,7 @@ class SchedulerService:
             status=ScheduledTaskStatus.ACTIVE,
             concurrency_policy=ScheduledTaskConcurrencyPolicy.SKIP,
             thread_policy=ScheduledTaskThreadPolicy.NEW_THREAD_EACH_RUN,
-            metadata={**payload.metadata, **({"created_by": trigger_type.value} if trigger_type else {})},
+            metadata=with_default_notification_metadata({**payload.metadata, **({"created_by": trigger_type.value} if trigger_type else {})}),
         )
 
     async def update_task(
@@ -156,7 +174,7 @@ class SchedulerService:
             run_at=_ensure_aware(run_at, timezone) if run_at else None,
             next_run_at=next_run_at,
             status=ScheduledTaskStatus.ACTIVE if task.status == ScheduledTaskStatus.COMPLETED else task.status,
-            metadata=payload.metadata if payload.metadata is not None else task.task_metadata,
+            metadata=with_default_notification_metadata(payload.metadata) if payload.metadata is not None else task.task_metadata,
         )
         if updated is None:
             raise SchedulerValidationError("Scheduled task not found.")
@@ -224,13 +242,14 @@ class SchedulerService:
             error=error,
         )
 
-    async def record_success(self, task: ScheduledTaskRecord, run_record: ScheduledTaskRunRecord) -> None:
+    async def record_success(self, task: ScheduledTaskRecord, run_record: ScheduledTaskRunRecord, *, result_summary: str | None = None) -> ScheduledTaskRunRecord | None:
         now = utc_now()
-        await self.store.update_scheduled_task_run(
+        updated_run = await self.store.update_scheduled_task_run(
             run_record.id,
             status=ScheduledTaskRunStatus.SUCCESS,
             finished_at=now,
             error=None,
+            result_summary=result_summary,
         )
         next_run_at = None
         next_status = task.status
@@ -257,10 +276,11 @@ class SchedulerService:
             locked_until=None,
             locked_by=None,
         )
+        return updated_run
 
-    async def record_error(self, task: ScheduledTaskRecord, run_record: ScheduledTaskRunRecord, error: str) -> None:
+    async def record_error(self, task: ScheduledTaskRecord, run_record: ScheduledTaskRunRecord, error: str) -> ScheduledTaskRunRecord | None:
         now = utc_now()
-        await self.store.update_scheduled_task_run(
+        updated_run = await self.store.update_scheduled_task_run(
             run_record.id,
             status=ScheduledTaskRunStatus.ERROR,
             finished_at=now,
@@ -286,3 +306,4 @@ class SchedulerService:
             locked_until=None,
             locked_by=None,
         )
+        return updated_run

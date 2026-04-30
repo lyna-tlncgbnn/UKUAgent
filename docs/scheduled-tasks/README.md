@@ -1,6 +1,6 @@
 # Scheduled Tasks Module
 
-Last updated: 2026-04-29
+Last updated: 2026-04-30
 
 ## Purpose
 
@@ -25,6 +25,7 @@ Completed:
 - Step 04: Gateway APIs
 - Step 05: conversation tools
 - Step 06: frontend UI
+- Step 07: WeCom result notifications
 
 ## Runtime Decisions
 
@@ -40,6 +41,10 @@ Completed:
 - Private assets associated with a deleted task are soft-deleted. Assets that
   were published to the organization are retained and detached from the deleted
   task metadata instead of being physically removed.
+- Scheduled task runs default to owner-only WeCom result notifications when
+  the owner has a bound `wecom_userid` and the WeCom channel is running.
+- Notification failures are recorded on the run and do not change the task run
+  success/error status.
 
 ## Step Documents
 
@@ -49,6 +54,7 @@ Completed:
 - [Step 04 - Gateway APIs](step-04-gateway-apis.md)
 - [Step 05 - Conversation Tools](step-05-conversation-tools.md)
 - [Step 06 - Frontend UI](step-06-frontend-ui.md)
+- [Step 07 - WeCom Result Notifications](step-07-wecom-result-notifications.md)
 
 ## Known Boundaries
 
@@ -56,3 +62,5 @@ Completed:
 - Lock columns are present for future multi-instance hardening.
 - Conversation tools call the Gateway API so the harness layer does not import
   the app layer directly.
+- First notification version sends Markdown text and generated file names only;
+  it does not upload result files as Enterprise WeChat attachments.

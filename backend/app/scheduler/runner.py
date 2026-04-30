@@ -15,6 +15,7 @@ from app.persistence import (
     ScheduledTaskStatus,
     ScheduledTaskTriggerType,
 )
+from app.scheduler.notifications import extract_run_summary, notify_scheduled_task_run
 from app.scheduler.service import SchedulerService, utc_now
 
 logger = logging.getLogger(__name__)
@@ -153,7 +154,9 @@ class SchedulerRunner:
                 multitask_strategy="reject",
                 source="scheduled_task",
             )
-            await service.store.update_scheduled_task_run(run_record.id, run_id=record.run_id)
+            updated_run = await service.store.update_scheduled_task_run(run_record.id, run_id=record.run_id)
+            if updated_run is not None:
+                run_record = updated_run
             if record.task is not None:
                 try:
                     await record.task
@@ -161,8 +164,37 @@ class SchedulerRunner:
                     pass
             if record.error:
                 raise RuntimeError(record.error)
-            await service.record_success(task, run_record)
+            summary = await extract_run_summary(self.app.state.checkpointer, thread_id)
+            updated_run = await service.record_success(task, run_record, result_summary=summary)
+            if updated_run is not None:
+                run_record = updated_run
+            await self._notify_run(service, task, run_record, ScheduledTaskRunStatus.SUCCESS, summary=summary)
         except Exception as exc:
             logger.exception("Scheduled task %s failed", task.id)
-            await service.record_error(task, run_record, str(exc))
+            updated_run = await service.record_error(task, run_record, str(exc))
+            if updated_run is not None:
+                run_record = updated_run
+            await self._notify_run(service, task, run_record, ScheduledTaskRunStatus.ERROR, error=str(exc))
         return run_record
+
+    async def _notify_run(
+        self,
+        service: SchedulerService,
+        task: ScheduledTaskRecord,
+        run_record,
+        status: ScheduledTaskRunStatus,
+        *,
+        summary: str | None = None,
+        error: str | None = None,
+    ) -> None:
+        try:
+            await notify_scheduled_task_run(
+                store=service.store,
+                task=task,
+                run_record=run_record,
+                status=status,
+                summary=summary,
+                error=error,
+            )
+        except Exception:
+            logger.exception("Scheduled task notification failed task=%s run=%s", task.id, run_record.id)

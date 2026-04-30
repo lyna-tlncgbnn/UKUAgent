@@ -21,6 +21,9 @@ the harness/app dependency boundary intact.
   instead of by model-generated absolute timestamps.
 - Tool responses include local display helpers such as `run_at_local` and
   `next_run_at_local` for the task timezone.
+- `create_scheduled_task` defaults to owner-only WeCom result notifications
+  through task metadata. The optional `notify` argument disables this only when
+  the user explicitly requests no notification.
 - The lead-agent prompt now includes `current_datetime` with `Asia/Shanghai`
   timezone so absolute time reasoning has hour/minute context.
 - Added tools for create, list, pause, resume, delete, and run-now.
@@ -47,3 +50,5 @@ the harness/app dependency boundary intact.
   agent instructions, not enforced by a separate confirmation token.
 - The tools use `DEER_FLOW_SCHEDULER_GATEWAY_URL` when set, otherwise they try
   local Gateway first and the Docker service name as a fallback.
+- Notification delivery is handled by the Gateway scheduler after each run, not
+  by the harness tool itself.

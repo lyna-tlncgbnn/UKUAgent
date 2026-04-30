@@ -15,6 +15,8 @@ runner that triggers due tasks.
   available.
 - The runner polls every five seconds, locks due tasks lightly, and launches
   task execution in background asyncio tasks.
+- The runner extracts the final assistant summary from the checkpoint and
+  triggers owner-only WeCom result notification after success or error.
 - First-version concurrency behavior is `skip` when a task already has a queued
   or running execution.
 
@@ -40,3 +42,5 @@ runner that triggers due tasks.
 - Runner locking is intentionally light and suitable for one Gateway instance.
 - Future multi-instance deployment should harden claiming with database-specific
   row locking.
+- Notification failures are recorded on the run and do not change the scheduled
+  task run status.

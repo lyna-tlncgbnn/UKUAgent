@@ -22,6 +22,7 @@ from .models import (
     McpAccessRuleRecord,
     ScheduledTaskConcurrencyPolicy,
     ScheduledTaskRecord,
+    ScheduledTaskRunNotificationStatus,
     ScheduledTaskRunRecord,
     ScheduledTaskRunStatus,
     ScheduledTaskScheduleType,
@@ -53,6 +54,20 @@ def _migrate_business_schema(sync_conn) -> None:
     index_names = {index["name"] for index in inspector.get_indexes("users")}
     if "ix_users_wecom_userid_unique" not in index_names:
         sync_conn.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS ix_users_wecom_userid_unique ON users (wecom_userid)"))
+
+    if "scheduled_task_runs" in table_names:
+        run_columns = {column["name"] for column in inspector.get_columns("scheduled_task_runs")}
+        if "notification_status" not in run_columns:
+            sync_conn.execute(text("ALTER TABLE scheduled_task_runs ADD COLUMN notification_status VARCHAR(32) DEFAULT 'PENDING' NOT NULL"))
+        else:
+            sync_conn.execute(text("UPDATE scheduled_task_runs SET notification_status = 'PENDING' WHERE notification_status = 'pending'"))
+            sync_conn.execute(text("UPDATE scheduled_task_runs SET notification_status = 'SENT' WHERE notification_status = 'sent'"))
+            sync_conn.execute(text("UPDATE scheduled_task_runs SET notification_status = 'SKIPPED' WHERE notification_status = 'skipped'"))
+            sync_conn.execute(text("UPDATE scheduled_task_runs SET notification_status = 'ERROR' WHERE notification_status = 'error'"))
+        if "notification_error" not in run_columns:
+            sync_conn.execute(text("ALTER TABLE scheduled_task_runs ADD COLUMN notification_error TEXT"))
+        if "notified_at" not in run_columns:
+            sync_conn.execute(text("ALTER TABLE scheduled_task_runs ADD COLUMN notified_at DATETIME"))
 
 
 class BusinessStore:
@@ -395,6 +410,7 @@ class BusinessStore:
         status: AssetStatus | None = AssetStatus.ACTIVE,
         thread_id: str | None = None,
         task_id: str | None = None,
+        run_id: str | None = None,
         kind: AssetKind | None = None,
         q: str | None = None,
         limit: int = 50,
@@ -412,6 +428,8 @@ class BusinessStore:
                 stmt = stmt.where(AssetRecord.thread_id == thread_id)
             if task_id is not None:
                 stmt = stmt.where(AssetRecord.task_id == task_id)
+            if run_id is not None:
+                stmt = stmt.where(AssetRecord.run_id == run_id)
             if kind is not None:
                 stmt = stmt.where(AssetRecord.kind == kind)
             if q:
@@ -782,6 +800,7 @@ class BusinessStore:
         trigger_type: ScheduledTaskTriggerType = ScheduledTaskTriggerType.SCHEDULE,
         error: str | None = None,
         result_summary: str | None = None,
+        notification_status: ScheduledTaskRunNotificationStatus = ScheduledTaskRunNotificationStatus.PENDING,
     ) -> ScheduledTaskRunRecord:
         async with self.session() as session:
             record = ScheduledTaskRunRecord(
@@ -797,6 +816,7 @@ class BusinessStore:
                 trigger_type=trigger_type,
                 error=error,
                 result_summary=result_summary,
+                notification_status=notification_status,
             )
             session.add(record)
             await session.commit()

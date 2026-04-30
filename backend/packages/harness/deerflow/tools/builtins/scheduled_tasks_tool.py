@@ -126,6 +126,7 @@ def create_scheduled_task(
     interval_seconds: int | None = None,
     run_at: str | None = None,
     delay_seconds: int | None = None,
+    notify: bool = True,
 ) -> dict[str, Any]:
     """Create a scheduled agent task after the user has explicitly confirmed it.
 
@@ -135,6 +136,9 @@ def create_scheduled_task(
     yourself. For absolute one-time schedules provide run_at as an ISO datetime
     string, preferably with an explicit timezone offset. For cron schedules
     provide cron_expr. For interval schedules provide interval_seconds.
+    By default the task owner receives WeCom private-chat notifications for
+    success and error results when their account is bound to WeCom. Set
+    notify=False only when the user explicitly asks not to be notified.
     """
 
     if schedule_type == "once" and delay_seconds is not None:
@@ -150,7 +154,15 @@ def create_scheduled_task(
         "cron_expr": cron_expr,
         "interval_seconds": interval_seconds,
         "run_at": run_at,
-        "metadata": {"created_from": "conversation_tool"},
+        "metadata": {
+            "created_from": "conversation_tool",
+            "notification": {
+                "enabled": notify,
+                "channel": "wecom",
+                "on": ["success", "error"],
+                "include_assets": True,
+            },
+        },
     }
     return _request("POST", "/api/scheduled-tasks", runtime, json=payload)
 

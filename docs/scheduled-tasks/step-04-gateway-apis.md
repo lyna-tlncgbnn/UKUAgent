@@ -17,6 +17,8 @@ endpoints.
 - Delete also best-effort removes execution threads referenced by the task runs
   from business thread metadata, Gateway listing storage, checkpointer data, and
   local thread files.
+- Run responses now include notification delivery state:
+  `notification_status`, `notification_error`, and `notified_at`.
 
 ## Interfaces
 
@@ -31,6 +33,9 @@ endpoints.
 - `POST /api/scheduled-tasks/{task_id}/run-now`
 - `GET /api/scheduled-tasks/{task_id}/runs`
 - `GET /api/scheduled-tasks/{task_id}/runs/{task_run_id}`
+
+`ScheduledTaskRunResponse` includes the task result summary and the owner-only
+notification status for the run.
 
 ## Verification
 
