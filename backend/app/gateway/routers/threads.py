@@ -22,6 +22,7 @@ from pydantic import BaseModel, Field
 
 from app.gateway.auth import require_business_store, require_current_user, require_owned_thread
 from app.gateway.deps import get_checkpointer, get_store
+from app.persistence import AssetVisibility
 from deerflow.config.paths import Paths, get_paths
 from deerflow.runtime.serialization import serialize_channel_values
 
@@ -225,9 +226,14 @@ async def delete_thread_data(thread_id: str, request: Request) -> ThreadDeleteRe
     thread = await require_owned_thread(request, thread_id)
     if thread is not None and getattr(thread, "source", None) == "wecom":
         raise HTTPException(status_code=400, detail="WeCom thread cannot be deleted. Clear its chat history instead.")
+    business_store = require_business_store(request)
+    shared_assets = await business_store.list_assets(thread_id=thread_id, visibility=AssetVisibility.ORG_SHARED, limit=1)
 
     # Clean local filesystem
-    response = _delete_thread_data(thread_id)
+    if shared_assets:
+        response = ThreadDeleteResponse(success=True, message=f"Thread {thread_id} metadata deleted; shared asset files preserved.")
+    else:
+        response = _delete_thread_data(thread_id)
 
     # Remove from Store (best-effort)
     store = get_store(request)
@@ -245,6 +251,9 @@ async def delete_thread_data(thread_id: str, request: Request) -> ThreadDeleteRe
                 await checkpointer.adelete_thread(thread_id)
         except Exception:
             logger.debug("Could not delete checkpoints for thread %s (not critical)", thread_id)
+
+    if business_store is not None:
+        await business_store.delete_thread(thread_id, user_id=thread.user_id if thread is not None else None)
 
     return response
 

@@ -4,6 +4,8 @@ docker/.cache/
 .omc/
 # OS generated files
 .DS_Store
+.tmp/
+nul
 *.local
 ._*
 .Spotlight-V100

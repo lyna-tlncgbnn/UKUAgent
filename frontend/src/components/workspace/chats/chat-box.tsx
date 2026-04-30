@@ -11,6 +11,7 @@ import {
   ResizablePanelGroup,
 } from "@/components/ui/resizable";
 import { env } from "@/env";
+import { useAssets } from "@/core/assets";
 import { cn } from "@/lib/utils";
 
 import {
@@ -28,6 +29,7 @@ const ChatBox: React.FC<{ children: React.ReactNode; threadId: string }> = ({
   threadId,
 }) => {
   const { thread } = useThread();
+  const { assets: threadAssets } = useAssets({ space: "thread", thread_id: threadId, limit: 100 });
   const pathname = usePathname();
   const threadIdRef = useRef(threadId);
   const layoutRef = useRef<GroupImperativeHandle>(null);
@@ -49,8 +51,9 @@ const ChatBox: React.FC<{ children: React.ReactNode; threadId: string }> = ({
       deselect();
     }
 
-    // Update artifacts from the current thread
-    setArtifacts(thread.values.artifacts);
+    const assetPaths = threadAssets.map((asset) => asset.storage_uri);
+    const nextArtifacts = assetPaths.length > 0 ? assetPaths : thread.values.artifacts;
+    setArtifacts(nextArtifacts);
 
     // DO NOT automatically deselect the artifact when switching threads, because the artifacts auto discovering is not work now.
     // if (
@@ -64,9 +67,9 @@ const ChatBox: React.FC<{ children: React.ReactNode; threadId: string }> = ({
       env.NEXT_PUBLIC_STATIC_WEBSITE_ONLY === "true" &&
       autoSelectFirstArtifact
     ) {
-      if (thread?.values?.artifacts?.length > 0) {
+      if (nextArtifacts?.length > 0) {
         setAutoSelectFirstArtifact(false);
-        selectArtifact(thread.values.artifacts[0]!);
+        selectArtifact(nextArtifacts[0]!);
       }
     }
   }, [
@@ -76,6 +79,7 @@ const ChatBox: React.FC<{ children: React.ReactNode; threadId: string }> = ({
     selectArtifact,
     selectedArtifact,
     setArtifacts,
+    threadAssets,
     thread.values.artifacts,
   ]);
 

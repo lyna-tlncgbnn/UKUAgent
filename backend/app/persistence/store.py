@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
-from datetime import datetime
+from datetime import UTC, datetime
 
 from sqlalchemy import delete, or_, select
 from sqlalchemy import inspect, text
@@ -14,6 +14,10 @@ from .models import (
     AgentContentRecord,
     AgentRecord,
     AgentVisibility,
+    AssetKind,
+    AssetRecord,
+    AssetStatus,
+    AssetVisibility,
     Base,
     McpAccessRuleRecord,
     ScheduledTaskConcurrencyPolicy,
@@ -167,6 +171,15 @@ class BusinessStore:
                 return False
             if user_id is not None and record.user_id != user_id:
                 return False
+            assets_result = await session.execute(select(AssetRecord).where(AssetRecord.thread_id == thread_id))
+            now = datetime.now(UTC)
+            for asset in assets_result.scalars().all():
+                if asset.visibility == AssetVisibility.ORG_SHARED:
+                    asset.thread_id = None
+                    asset.asset_metadata = {**(asset.asset_metadata or {}), "detached_thread_id": thread_id}
+                else:
+                    asset.status = AssetStatus.DELETED
+                    asset.deleted_at = now
             await session.execute(delete(ThreadFileRecord).where(ThreadFileRecord.thread_id == thread_id))
             await session.delete(record)
             await session.commit()
@@ -248,6 +261,257 @@ class BusinessStore:
             )
             await session.commit()
             return int(result.rowcount or 0)
+
+    async def create_asset(
+        self,
+        asset_id: str,
+        *,
+        owner_user_id: str,
+        filename: str,
+        display_name: str | None,
+        kind: AssetKind,
+        storage_uri: str,
+        mime_type: str | None = None,
+        size_bytes: int | None = None,
+        checksum: str | None = None,
+        visibility: AssetVisibility = AssetVisibility.PRIVATE,
+        status: AssetStatus = AssetStatus.ACTIVE,
+        thread_id: str | None = None,
+        run_id: str | None = None,
+        task_id: str | None = None,
+        agent_id: str | None = None,
+        message_id: str | None = None,
+        tool_call_id: str | None = None,
+        source_asset_id: str | None = None,
+        version_group_id: str | None = None,
+        version_number: int = 1,
+        metadata: dict | None = None,
+    ) -> AssetRecord:
+        async with self.session() as session:
+            record = AssetRecord(
+                id=asset_id,
+                owner_user_id=owner_user_id,
+                filename=filename,
+                display_name=display_name or filename,
+                kind=kind,
+                mime_type=mime_type,
+                size_bytes=size_bytes,
+                storage_uri=storage_uri,
+                checksum=checksum,
+                visibility=visibility,
+                status=status,
+                thread_id=thread_id,
+                run_id=run_id,
+                task_id=task_id,
+                agent_id=agent_id,
+                message_id=message_id,
+                tool_call_id=tool_call_id,
+                source_asset_id=source_asset_id,
+                version_group_id=version_group_id or asset_id,
+                version_number=version_number,
+                asset_metadata=metadata or {},
+            )
+            session.add(record)
+            await session.commit()
+            await session.refresh(record)
+            return record
+
+    async def upsert_asset_by_storage_uri(
+        self,
+        asset_id: str,
+        *,
+        owner_user_id: str,
+        filename: str,
+        display_name: str | None,
+        kind: AssetKind,
+        storage_uri: str,
+        thread_id: str | None,
+        mime_type: str | None = None,
+        size_bytes: int | None = None,
+        checksum: str | None = None,
+        run_id: str | None = None,
+        task_id: str | None = None,
+        agent_id: str | None = None,
+        message_id: str | None = None,
+        tool_call_id: str | None = None,
+        source_asset_id: str | None = None,
+        metadata: dict | None = None,
+    ) -> AssetRecord:
+        async with self.session() as session:
+            stmt = select(AssetRecord).where(
+                AssetRecord.thread_id == thread_id,
+                AssetRecord.storage_uri == storage_uri,
+            )
+            result = await session.execute(stmt)
+            record = result.scalar_one_or_none()
+            if record is None:
+                record = AssetRecord(
+                    id=asset_id,
+                    owner_user_id=owner_user_id,
+                    filename=filename,
+                    display_name=display_name or filename,
+                    kind=kind,
+                    mime_type=mime_type,
+                    size_bytes=size_bytes,
+                    storage_uri=storage_uri,
+                    checksum=checksum,
+                    thread_id=thread_id,
+                    run_id=run_id,
+                    task_id=task_id,
+                    agent_id=agent_id,
+                    message_id=message_id,
+                    tool_call_id=tool_call_id,
+                    source_asset_id=source_asset_id,
+                    version_group_id=asset_id,
+                    version_number=1,
+                    asset_metadata=metadata or {},
+                )
+                session.add(record)
+            else:
+                record.mime_type = record.mime_type or mime_type
+                record.size_bytes = record.size_bytes or size_bytes
+                record.checksum = record.checksum or checksum
+                record.run_id = record.run_id or run_id
+                record.task_id = record.task_id or task_id
+                record.agent_id = record.agent_id or agent_id
+                record.message_id = record.message_id or message_id
+                record.tool_call_id = record.tool_call_id or tool_call_id
+                record.source_asset_id = record.source_asset_id or source_asset_id
+                if metadata:
+                    record.asset_metadata = {**(record.asset_metadata or {}), **metadata}
+            await session.commit()
+            await session.refresh(record)
+            return record
+
+    async def get_asset(self, asset_id: str) -> AssetRecord | None:
+        async with self.session() as session:
+            return await session.get(AssetRecord, asset_id)
+
+    async def list_assets(
+        self,
+        *,
+        owner_user_id: str | None = None,
+        visibility: AssetVisibility | None = None,
+        status: AssetStatus | None = AssetStatus.ACTIVE,
+        thread_id: str | None = None,
+        task_id: str | None = None,
+        kind: AssetKind | None = None,
+        q: str | None = None,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> list[AssetRecord]:
+        async with self.session() as session:
+            stmt = select(AssetRecord)
+            if owner_user_id is not None:
+                stmt = stmt.where(AssetRecord.owner_user_id == owner_user_id)
+            if visibility is not None:
+                stmt = stmt.where(AssetRecord.visibility == visibility)
+            if status is not None:
+                stmt = stmt.where(AssetRecord.status == status)
+            if thread_id is not None:
+                stmt = stmt.where(AssetRecord.thread_id == thread_id)
+            if task_id is not None:
+                stmt = stmt.where(AssetRecord.task_id == task_id)
+            if kind is not None:
+                stmt = stmt.where(AssetRecord.kind == kind)
+            if q:
+                pattern = f"%{q}%"
+                stmt = stmt.where(or_(AssetRecord.filename.like(pattern), AssetRecord.display_name.like(pattern)))
+            stmt = stmt.order_by(AssetRecord.created_at.desc(), AssetRecord.id.desc()).offset(offset).limit(limit)
+            result = await session.execute(stmt)
+            return list(result.scalars().all())
+
+    async def update_asset(
+        self,
+        asset_id: str,
+        *,
+        display_name: str | None = None,
+        visibility: AssetVisibility | None = None,
+        status: AssetStatus | None = None,
+        deleted_at: datetime | None = None,
+        metadata: dict | None = None,
+        clear_task_id: bool = False,
+    ) -> AssetRecord | None:
+        async with self.session() as session:
+            record = await session.get(AssetRecord, asset_id)
+            if record is None:
+                return None
+            if display_name is not None:
+                record.display_name = display_name
+            if visibility is not None:
+                record.visibility = visibility
+            if status is not None:
+                record.status = status
+                if status != AssetStatus.DELETED:
+                    record.deleted_at = None
+            if deleted_at is not None:
+                record.deleted_at = deleted_at
+            if clear_task_id:
+                record.task_id = None
+            if metadata is not None:
+                record.asset_metadata = {**(record.asset_metadata or {}), **metadata}
+            await session.commit()
+            await session.refresh(record)
+            return record
+
+    async def soft_delete_asset(self, asset_id: str) -> AssetRecord | None:
+        return await self.update_asset(
+            asset_id,
+            status=AssetStatus.DELETED,
+            deleted_at=datetime.now(UTC),
+        )
+
+    async def soft_delete_private_assets_for_thread(self, thread_id: str, *, user_id: str | None = None) -> int:
+        async with self.session() as session:
+            stmt = select(AssetRecord).where(
+                AssetRecord.thread_id == thread_id,
+                AssetRecord.visibility != AssetVisibility.ORG_SHARED,
+                AssetRecord.status != AssetStatus.DELETED,
+            )
+            if user_id is not None:
+                stmt = stmt.where(AssetRecord.owner_user_id == user_id)
+            result = await session.execute(stmt)
+            records = list(result.scalars().all())
+            now = datetime.now(UTC)
+            for record in records:
+                record.status = AssetStatus.DELETED
+                record.deleted_at = now
+            await session.commit()
+            return len(records)
+
+    async def detach_shared_assets_for_task(self, task_id: str, *, user_id: str | None = None) -> int:
+        async with self.session() as session:
+            stmt = select(AssetRecord).where(
+                AssetRecord.task_id == task_id,
+                AssetRecord.visibility == AssetVisibility.ORG_SHARED,
+            )
+            if user_id is not None:
+                stmt = stmt.where(AssetRecord.owner_user_id == user_id)
+            result = await session.execute(stmt)
+            records = list(result.scalars().all())
+            for record in records:
+                record.task_id = None
+                record.asset_metadata = {**(record.asset_metadata or {}), "detached_task_id": task_id}
+            await session.commit()
+            return len(records)
+
+    async def soft_delete_private_assets_for_task(self, task_id: str, *, user_id: str | None = None) -> int:
+        async with self.session() as session:
+            stmt = select(AssetRecord).where(
+                AssetRecord.task_id == task_id,
+                AssetRecord.visibility != AssetVisibility.ORG_SHARED,
+                AssetRecord.status != AssetStatus.DELETED,
+            )
+            if user_id is not None:
+                stmt = stmt.where(AssetRecord.owner_user_id == user_id)
+            result = await session.execute(stmt)
+            records = list(result.scalars().all())
+            now = datetime.now(UTC)
+            for record in records:
+                record.status = AssetStatus.DELETED
+                record.deleted_at = now
+            await session.commit()
+            return len(records)
 
     async def get_user_memory(self, user_id: str) -> UserMemoryRecord | None:
         async with self.session() as session:

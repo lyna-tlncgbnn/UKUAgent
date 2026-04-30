@@ -118,5 +118,6 @@ function nameOfSegment(
   if (segment === "chats") return t.breadcrumb.chats;
   if (segment === "agents") return t.breadcrumb.agents;
   if (segment === "scheduled-tasks") return t.breadcrumb.scheduledTasks;
+  if (segment === "files") return t.breadcrumb.files;
   return segment[0]?.toUpperCase() + segment.slice(1);
 }

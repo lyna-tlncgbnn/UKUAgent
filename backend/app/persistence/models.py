@@ -27,6 +27,26 @@ class ThreadFileKind(str, enum.Enum):
     ARTIFACT = "artifact"
 
 
+class AssetKind(str, enum.Enum):
+    UPLOAD = "upload"
+    GENERATED = "generated"
+    CONVERTED = "converted"
+    EXPORT = "export"
+    SNAPSHOT = "snapshot"
+
+
+class AssetVisibility(str, enum.Enum):
+    PRIVATE = "private"
+    ORG_SHARED = "org_shared"
+    RESTRICTED = "restricted"
+
+
+class AssetStatus(str, enum.Enum):
+    ACTIVE = "active"
+    ARCHIVED = "archived"
+    DELETED = "deleted"
+
+
 class AgentVisibility(str, enum.Enum):
     PRIVATE = "private"
     ORG_SHARED = "org_shared"
@@ -97,6 +117,7 @@ class UserRecord(Base):
     memory: Mapped[UserMemoryRecord | None] = relationship(back_populates="user", cascade="all, delete-orphan", uselist=False)
     owned_agents: Mapped[list[AgentRecord]] = relationship(back_populates="owner", cascade="all, delete-orphan")
     scheduled_tasks: Mapped[list[ScheduledTaskRecord]] = relationship(back_populates="user", cascade="all, delete-orphan")
+    assets: Mapped[list[AssetRecord]] = relationship(back_populates="owner", cascade="all, delete-orphan")
 
 
 class ThreadRecord(Base):
@@ -117,6 +138,7 @@ class ThreadRecord(Base):
 
     user: Mapped[UserRecord] = relationship(back_populates="threads")
     files: Mapped[list[ThreadFileRecord]] = relationship(back_populates="thread", cascade="all, delete-orphan")
+    assets: Mapped[list[AssetRecord]] = relationship(back_populates="thread")
 
 
 class ThreadFileRecord(Base):
@@ -133,6 +155,44 @@ class ThreadFileRecord(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
     thread: Mapped[ThreadRecord] = relationship(back_populates="files")
+
+
+class AssetRecord(Base):
+    __tablename__ = "assets"
+    __table_args__ = (UniqueConstraint("thread_id", "storage_uri", name="uq_assets_thread_storage_uri"),)
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    owner_user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    filename: Mapped[str] = mapped_column(String(512), nullable=False)
+    display_name: Mapped[str] = mapped_column(String(512), nullable=False)
+    kind: Mapped[AssetKind] = mapped_column(Enum(AssetKind), nullable=False, index=True)
+    mime_type: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    size_bytes: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    storage_uri: Mapped[str] = mapped_column(Text, nullable=False)
+    checksum: Mapped[str | None] = mapped_column(String(128), nullable=True, index=True)
+    visibility: Mapped[AssetVisibility] = mapped_column(Enum(AssetVisibility), default=AssetVisibility.PRIVATE, nullable=False, index=True)
+    status: Mapped[AssetStatus] = mapped_column(Enum(AssetStatus), default=AssetStatus.ACTIVE, nullable=False, index=True)
+    thread_id: Mapped[str | None] = mapped_column(ForeignKey("threads.id", ondelete="SET NULL"), nullable=True, index=True)
+    run_id: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+    task_id: Mapped[str | None] = mapped_column(ForeignKey("scheduled_tasks.id", ondelete="SET NULL"), nullable=True, index=True)
+    agent_id: Mapped[str | None] = mapped_column(String(255), nullable=True, index=True)
+    message_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    tool_call_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    source_asset_id: Mapped[str | None] = mapped_column(ForeignKey("assets.id", ondelete="SET NULL"), nullable=True, index=True)
+    version_group_id: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+    version_number: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
+    asset_metadata: Mapped[dict] = mapped_column("metadata", JSON, default=dict, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
+    )
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    owner: Mapped[UserRecord] = relationship(back_populates="assets")
+    thread: Mapped[ThreadRecord | None] = relationship(back_populates="assets")
 
 
 class UserMemoryRecord(Base):

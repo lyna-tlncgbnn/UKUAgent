@@ -54,6 +54,7 @@ This is an intentional transitional architecture:
 - generated thread titles are persisted
 - first-message uploads now use the real thread id
 - uploaded images in a brand new thread can render immediately
+- files now have a first-class asset catalog with private and organization-shared spaces
 
 ## What Is Next
 

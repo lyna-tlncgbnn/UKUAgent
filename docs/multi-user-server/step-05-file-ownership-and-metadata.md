@@ -135,6 +135,20 @@ This creates the first durable ownership bridge between:
 - filesystem paths
 - business metadata
 
+## Follow-up: Asset Catalog
+
+The later Artifact Asset Catalog workstream keeps `thread_files` as a
+compatibility record but introduces `assets` as the primary user-facing file
+metadata model.
+
+In the new model:
+
+- uploaded files are recorded as `AssetKind.UPLOAD`
+- markdown conversion companions are recorded as `AssetKind.CONVERTED`
+- files presented by agents are reconciled as `AssetKind.GENERATED`
+- organization sharing is controlled by asset `visibility`, not by moving files
+  into a shared directory
+
 ## Intentional Non-Goals For Step 05
 
 This step does **not** yet:

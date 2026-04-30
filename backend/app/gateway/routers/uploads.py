@@ -9,9 +9,10 @@ from pathlib import Path
 from fastapi import APIRouter, File, HTTPException, Request, UploadFile
 from pydantic import BaseModel
 
+from app.gateway.asset_utils import record_thread_asset
 from app.gateway.auth import get_optional_current_user, require_owned_thread
 from app.gateway.deps import get_business_store
-from app.persistence import ThreadFileKind
+from app.persistence import AssetKind, ThreadFileKind
 from deerflow.config.paths import get_paths
 from deerflow.sandbox.sandbox_provider import get_sandbox_provider
 from deerflow.uploads.manager import (
@@ -128,6 +129,19 @@ async def upload_files(
                     mime_type=file.content_type,
                     size_bytes=len(content),
                 )
+                uploaded_asset = await record_thread_asset(
+                    business_store,
+                    owner_user_id=current_user.id,
+                    thread_id=thread_id,
+                    storage_uri=virtual_path,
+                    kind=AssetKind.UPLOAD,
+                    filename=safe_filename,
+                    mime_type=file.content_type,
+                    size_bytes=len(content),
+                    metadata={"source": "upload"},
+                )
+            else:
+                uploaded_asset = None
 
             file_ext = file_path.suffix.lower()
             if file_ext in CONVERTIBLE_EXTENSIONS:
@@ -155,6 +169,18 @@ async def upload_files(
                             storage_path=str(sandbox_uploads / md_path.name),
                             mime_type="text/markdown",
                             size_bytes=len(markdown_bytes),
+                        )
+                        await record_thread_asset(
+                            business_store,
+                            owner_user_id=current_user.id,
+                            thread_id=thread_id,
+                            storage_uri=md_virtual_path,
+                            kind=AssetKind.CONVERTED,
+                            filename=md_path.name,
+                            mime_type="text/markdown",
+                            size_bytes=len(markdown_bytes),
+                            source_asset_id=uploaded_asset.id if uploaded_asset is not None else None,
+                            metadata={"source": "upload_conversion", "source_filename": safe_filename},
                         )
 
             uploaded_files.append(file_info)

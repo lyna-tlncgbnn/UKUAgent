@@ -115,6 +115,7 @@ export interface Translations {
     demoChats: string;
     agents: string;
     scheduledTasks: string;
+    files: string;
     wecomChat: string;
     clearChatHistory: string;
     clearChatHistorySuccess: string;
@@ -154,6 +155,55 @@ export interface Translations {
     chats: string;
     agents: string;
     scheduledTasks: string;
+    files: string;
+  };
+
+  assets: {
+    title: string;
+    description: string;
+    internalOnly: string;
+    loadError: string;
+    emptyTitle: string;
+    emptyDescription: string;
+    emptyBySpace: {
+      mine: string;
+      org_shared: string;
+      thread: string;
+      task: string;
+      trash: string;
+    };
+    noSelectionTitle: string;
+    noSelectionDescription: string;
+    previewUnavailableTitle: string;
+    previewUnavailableDescription: string;
+    orgShared: string;
+    deletedStatus: string;
+    publishToOrg: string;
+    unpublish: string;
+    published: string;
+    unpublished: string;
+    deleted: string;
+    restored: string;
+    restore: string;
+    operationFailed: string;
+    openThread: string;
+    sourceThread: string;
+    sourceTask: string;
+    sourceStandalone: string;
+    spaces: {
+      mine: string;
+      org_shared: string;
+      thread: string;
+      task: string;
+      trash: string;
+    };
+    kinds: {
+      upload: string;
+      generated: string;
+      converted: string;
+      export: string;
+      snapshot: string;
+    };
   };
 
   // Scheduled Tasks

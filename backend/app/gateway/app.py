@@ -9,6 +9,7 @@ from app.gateway.deps import langgraph_runtime
 from app.gateway.auth import resolve_authenticated_user
 from app.gateway.routers import (
     agents,
+    assets,
     artifacts,
     assistants_compat,
     channels,
@@ -146,8 +147,12 @@ This gateway provides custom endpoints for models, MCP configuration, skills, an
                 "description": "Manage skills and their configurations",
             },
             {
+                "name": "assets",
+                "description": "Manage user-owned and organization-shared asset metadata and content",
+            },
+            {
                 "name": "artifacts",
-                "description": "Access and download thread artifacts and generated files",
+                "description": "Compatibility access for thread artifact paths and generated files",
             },
             {
                 "name": "uploads",
@@ -215,6 +220,9 @@ This gateway provides custom endpoints for models, MCP configuration, skills, an
 
     # Artifacts API is mounted at /api/threads/{thread_id}/artifacts
     app.include_router(artifacts.router)
+
+    # Assets API is mounted at /api/assets
+    app.include_router(assets.router)
 
     # Uploads API is mounted at /api/threads/{thread_id}/uploads
     app.include_router(uploads.router)

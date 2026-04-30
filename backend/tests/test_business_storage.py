@@ -10,6 +10,9 @@ import pytest
 import deerflow.config.app_config as app_config_module
 from app.persistence import (
     AgentVisibility,
+    AssetKind,
+    AssetStatus,
+    AssetVisibility,
     ScheduledTaskRunStatus,
     ScheduledTaskScheduleType,
     ScheduledTaskStatus,
@@ -102,6 +105,70 @@ def test_business_store_round_trips_user_thread_memory_and_file():
             assert deleted_thread_wrong_user is False
             assert deleted_thread is True
             assert await store.get_thread("thread-1") is None
+
+    asyncio.run(run_test())
+
+
+def test_business_store_round_trips_assets():
+    async def run_test():
+        set_app_config(_make_test_config())
+
+        async with create_business_store() as store:
+            assert store is not None
+            await store.upsert_user("owner", email="owner@example.com", name="Owner")
+            await store.upsert_user("viewer", email="viewer@example.com", name="Viewer")
+            await store.create_thread("thread-asset", user_id="owner", title="Assets")
+
+            asset = await store.create_asset(
+                "asset-1",
+                owner_user_id="owner",
+                filename="report.md",
+                display_name="Report",
+                kind=AssetKind.GENERATED,
+                storage_uri="/mnt/user-data/outputs/report.md",
+                thread_id="thread-asset",
+                mime_type="text/markdown",
+                size_bytes=12,
+                checksum="abc",
+            )
+            assert asset.visibility is AssetVisibility.PRIVATE
+            assert asset.status is AssetStatus.ACTIVE
+            assert asset.version_number == 1
+
+            duplicate = await store.upsert_asset_by_storage_uri(
+                "asset-duplicate",
+                owner_user_id="owner",
+                filename="report.md",
+                display_name="Report",
+                kind=AssetKind.GENERATED,
+                storage_uri="/mnt/user-data/outputs/report.md",
+                thread_id="thread-asset",
+                run_id="run-1",
+            )
+            assert duplicate.id == "asset-1"
+            assert duplicate.run_id == "run-1"
+
+            mine = await store.list_assets(owner_user_id="owner")
+            shared_before = await store.list_assets(visibility=AssetVisibility.ORG_SHARED)
+            published = await store.update_asset("asset-1", visibility=AssetVisibility.ORG_SHARED)
+            shared_after = await store.list_assets(visibility=AssetVisibility.ORG_SHARED)
+            deleted = await store.soft_delete_asset("asset-1")
+            active_after_delete = await store.list_assets(owner_user_id="owner")
+            trash = await store.list_assets(owner_user_id="owner", status=AssetStatus.DELETED)
+            restored = await store.update_asset("asset-1", status=AssetStatus.ACTIVE)
+            active_after_restore = await store.list_assets(owner_user_id="owner")
+
+            assert [item.id for item in mine] == ["asset-1"]
+            assert shared_before == []
+            assert published is not None and published.visibility is AssetVisibility.ORG_SHARED
+            assert [item.id for item in shared_after] == ["asset-1"]
+            assert deleted is not None and deleted.status is AssetStatus.DELETED
+            assert deleted.deleted_at is not None
+            assert active_after_delete == []
+            assert [item.id for item in trash] == ["asset-1"]
+            assert restored is not None and restored.status is AssetStatus.ACTIVE
+            assert restored.deleted_at is None
+            assert [item.id for item in active_after_restore] == ["asset-1"]
 
     asyncio.run(run_test())
 

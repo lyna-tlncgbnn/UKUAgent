@@ -6,6 +6,7 @@ from app.gateway.auth import require_business_store, require_current_user
 from app.gateway.deps import get_checkpointer, get_store
 from app.gateway.routers.threads import THREADS_NS, _delete_thread_data
 from app.persistence import ScheduledTaskTriggerType
+from app.persistence import AssetVisibility
 from app.scheduler import SchedulerService
 from app.scheduler.schemas import (
     ScheduledTaskCreateRequest,
@@ -44,6 +45,13 @@ async def _delete_scheduled_task_threads(request: Request, *, user_id: str, thre
     checkpointer = get_checkpointer(request)
 
     for thread_id in thread_ids:
+        preserve_files = False
+        try:
+            shared_assets = await business_store.list_assets(thread_id=thread_id, visibility=AssetVisibility.ORG_SHARED, limit=1)
+            preserve_files = bool(shared_assets)
+        except Exception:
+            pass
+
         try:
             await business_store.delete_thread(thread_id, user_id=user_id)
         except Exception:
@@ -61,10 +69,11 @@ async def _delete_scheduled_task_threads(request: Request, *, user_id: str, thre
             except Exception:
                 pass
 
-        try:
-            _delete_thread_data(thread_id)
-        except Exception:
-            pass
+        if not preserve_files:
+            try:
+                _delete_thread_data(thread_id)
+            except Exception:
+                pass
 
 
 @router.get("", response_model=list[ScheduledTaskResponse])
@@ -108,6 +117,8 @@ async def delete_scheduled_task(task_id: str, request: Request) -> Response:
     task = await store.get_scheduled_task_for_user(task_id, current_user.id)
     if task is None:
         return Response(status_code=204)
+    await store.soft_delete_private_assets_for_task(task.id, user_id=task.user_id)
+    await store.detach_shared_assets_for_task(task.id, user_id=task.user_id)
     runs = await store.list_scheduled_task_runs(task_id=task.id, user_id=task.user_id)
     thread_ids = {run.thread_id for run in runs if run.thread_id}
     if task.thread_id:

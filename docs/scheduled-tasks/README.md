@@ -37,6 +37,9 @@ Completed:
 - Deleting a task also removes associated scheduled-task execution threads from
   business thread metadata, Gateway thread listing storage, checkpointer data,
   and local thread files on a best-effort basis.
+- Private assets associated with a deleted task are soft-deleted. Assets that
+  were published to the organization are retained and detached from the deleted
+  task metadata instead of being physically removed.
 
 ## Step Documents
 

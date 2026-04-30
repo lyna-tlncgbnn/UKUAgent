@@ -1,5 +1,6 @@
 __all__ = [
     "agents",
+    "assets",
     "artifacts",
     "assistants_compat",
     "channels",

@@ -18,7 +18,9 @@ from fastapi import HTTPException, Request
 from langchain_core.messages import HumanMessage
 
 from app.gateway.auth import get_optional_current_user
+from app.gateway.asset_utils import record_thread_asset
 from app.gateway.deps import get_business_store, get_checkpointer, get_run_manager, get_store, get_stream_bridge
+from app.persistence import AssetKind
 from deerflow.runtime import (
     END_SENTINEL,
     HEARTBEAT_SENTINEL,
@@ -251,6 +253,52 @@ async def _sync_thread_title_after_run(
         logger.debug("Failed to sync title for thread %s (non-fatal)", thread_id, exc_info=True)
 
 
+async def _reconcile_generated_assets_after_run(
+    run_task: asyncio.Task,
+    *,
+    thread_id: str,
+    run_id: str,
+    user_id: str | None,
+    assistant_id: str | None,
+    metadata: dict[str, Any] | None,
+    checkpointer: Any,
+    business_store: Any | None,
+) -> None:
+    """Record final presented files from the run state into the asset catalog."""
+    await asyncio.wait({run_task})
+    if business_store is None or user_id is None:
+        return
+    try:
+        ckpt_config = {"configurable": {"thread_id": thread_id, "checkpoint_ns": ""}}
+        ckpt_tuple = await checkpointer.aget_tuple(ckpt_config)
+        if ckpt_tuple is None:
+            return
+        channel_values = ckpt_tuple.checkpoint.get("channel_values", {})
+        artifacts = channel_values.get("artifacts") or []
+        if not isinstance(artifacts, list):
+            return
+        task_id = (metadata or {}).get("scheduled_task_id")
+        for storage_uri in artifacts:
+            if not isinstance(storage_uri, str):
+                continue
+            try:
+                await record_thread_asset(
+                    business_store,
+                    owner_user_id=user_id,
+                    thread_id=thread_id,
+                    storage_uri=storage_uri,
+                    kind=AssetKind.GENERATED,
+                    run_id=run_id,
+                    task_id=task_id,
+                    agent_id=assistant_id,
+                    metadata={"source": "present_files"},
+                )
+            except Exception:
+                logger.debug("Failed to record generated asset %s for thread %s", storage_uri, thread_id, exc_info=True)
+    except Exception:
+        logger.debug("Failed to reconcile generated assets for thread %s", thread_id, exc_info=True)
+
+
 async def start_run(
     body: Any,
     thread_id: str,
@@ -389,6 +437,19 @@ async def start_agent_run(
     # correct title instead of an empty values dict.
     if store is not None and source != "scheduled_task":
         asyncio.create_task(_sync_thread_title_after_run(task, thread_id, checkpointer, store))
+
+    asyncio.create_task(
+        _reconcile_generated_assets_after_run(
+            task,
+            thread_id=thread_id,
+            run_id=record.run_id,
+            user_id=user_id,
+            assistant_id=assistant_id,
+            metadata=metadata,
+            checkpointer=checkpointer,
+            business_store=business_store,
+        )
+    )
 
     return record
 
