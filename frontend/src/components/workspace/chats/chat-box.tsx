@@ -44,11 +44,14 @@ const ChatBox: React.FC<{ children: React.ReactNode; threadId: string }> = ({
     selectedArtifact,
   } = useArtifacts();
 
+  useEffect(() => {
+    deselect();
+  }, [deselect, threadId]);
+
   const [autoSelectFirstArtifact, setAutoSelectFirstArtifact] = useState(true);
   useEffect(() => {
     if (threadIdRef.current !== threadId) {
       threadIdRef.current = threadId;
-      deselect();
     }
 
     const assetPaths = threadAssets.map((asset) => asset.storage_uri);

@@ -44,6 +44,7 @@ export function MessageList({
   const rehypePlugins = useRehypeSplitWordsIntoSpans(thread.isLoading);
   const updateSubtask = useUpdateSubtask();
   const messages = thread.messages;
+  const groupedMessages = groupMessages(messages, (group) => group);
   if (thread.isThreadLoading && messages.length === 0) {
     return <MessageListSkeleton />;
   }
@@ -52,7 +53,9 @@ export function MessageList({
       className={cn("flex size-full flex-col justify-center", className)}
     >
       <ConversationContent className="mx-auto w-full max-w-(--container-width-md) gap-8 pt-12">
-        {groupMessages(messages, (group) => {
+        {groupedMessages.map((group, index) => {
+          const isLatestGroup = index === groupedMessages.length - 1;
+          const isGroupLoading = thread.isLoading && isLatestGroup;
           if (group.type === "human" || group.type === "assistant") {
             return group.messages.map((msg) => {
               return (
@@ -60,7 +63,7 @@ export function MessageList({
                   key={`${group.id}/${msg.id}`}
                   message={msg}
                   threadId={threadId}
-                  isLoading={thread.isLoading}
+                  isLoading={isGroupLoading}
                 />
               );
             });
@@ -68,13 +71,13 @@ export function MessageList({
             const message = group.messages[0];
             if (message && hasContent(message)) {
               return (
-                <MarkdownContent
-                  key={group.id}
-                  content={extractContentFromMessage(message)}
-                  isLoading={thread.isLoading}
-                  rehypePlugins={rehypePlugins}
-                />
-              );
+                  <MarkdownContent
+                    key={group.id}
+                    content={extractContentFromMessage(message)}
+                    isLoading={isGroupLoading}
+                    rehypePlugins={rehypePlugins}
+                  />
+                );
             }
             return null;
           } else if (group.type === "assistant:present-files") {
@@ -90,7 +93,7 @@ export function MessageList({
                 {group.messages[0] && hasContent(group.messages[0]) && (
                   <MarkdownContent
                     content={extractContentFromMessage(group.messages[0])}
-                    isLoading={thread.isLoading}
+                    isLoading={isGroupLoading}
                     rehypePlugins={rehypePlugins}
                     className="mb-4"
                   />
@@ -157,7 +160,7 @@ export function MessageList({
                   <MessageGroup
                     key={"thinking-group-" + message.id}
                     messages={[message]}
-                    isLoading={thread.isLoading}
+                    isLoading={isGroupLoading}
                   />,
                 );
               }
@@ -177,7 +180,7 @@ export function MessageList({
                   <SubtaskCard
                     key={"task-group-" + taskId}
                     taskId={taskId!}
-                    isLoading={thread.isLoading}
+                    isLoading={isGroupLoading}
                   />,
                 );
               }
@@ -195,7 +198,7 @@ export function MessageList({
             <MessageGroup
               key={"group-" + group.id}
               messages={group.messages}
-              isLoading={thread.isLoading}
+              isLoading={isGroupLoading}
             />
           );
         })}
