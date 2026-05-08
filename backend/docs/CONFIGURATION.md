@@ -173,6 +173,7 @@ Organize tools into logical groups:
 ```yaml
 tool_groups:
   - name: web          # Web browsing and search
+  - name: wiki         # Confluence Wiki tools
   - name: file:read    # Read-only file operations
   - name: file:write   # Write file operations
   - name: bash         # Shell command execution
@@ -194,6 +195,7 @@ tools:
 **Built-in Tools**:
 - `web_search` - Search the web (Tavily)
 - `web_fetch` - Fetch web pages (Jina AI)
+- `wiki_search_pages`, `wiki_get_page`, `wiki_get_page_permissions`, `wiki_list_children`, `wiki_create_page` - Confluence Wiki integration. See [CONFLUENCE_WIKI_TOOLS.md](CONFLUENCE_WIKI_TOOLS.md).
 - `ls` - List directory contents
 - `read_file` - Read file contents
 - `write_file` - Write file contents

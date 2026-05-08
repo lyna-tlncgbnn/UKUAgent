@@ -20,6 +20,7 @@ This directory contains detailed documentation for the DeerFlow backend.
 | [summarization.md](summarization.md) | Context summarization feature |
 | [plan_mode_usage.md](plan_mode_usage.md) | Plan mode with TodoList |
 | [AUTO_TITLE_GENERATION.md](AUTO_TITLE_GENERATION.md) | Automatic title generation |
+| [CONFLUENCE_WIKI_TOOLS.md](CONFLUENCE_WIKI_TOOLS.md) | Confluence Wiki tool integration |
 
 ## Development
 

@@ -1,319 +1,230 @@
-# 🦌 DeerFlow - 2.0
+# UkuBot
 
-English | [中文](./README_zh.md) | [日本語](./README_ja.md) | [Français](./README_fr.md) | [Русский](./README_ru.md)
+UkuBot 是面向企业内部协作的智能 Agent 平台。它把即时通讯入口、企业 Wiki、文件处理、长期记忆、任务执行环境和可扩展工具组织在一起，让团队可以在一个统一的对话入口中完成查询、整理、分析、文档沉淀和自动化协作。
 
-[![Python](https://img.shields.io/badge/Python-3.12%2B-3776AB?logo=python&logoColor=white)](./backend/pyproject.toml)
-[![Node.js](https://img.shields.io/badge/Node.js-22%2B-339933?logo=node.js&logoColor=white)](./Makefile)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
+UkuBot 基于 LangGraph、LangChain 和 DeerFlow 架构演进而来，保留了 sub-agents、memory、sandbox、skills/tools 等核心运行时能力，并针对企业内部知识库和协作流程做了集成与收敛。
 
-<a href="https://trendshift.io/repositories/14699" target="_blank"><img src="https://trendshift.io/api/badge/repositories/14699" alt="bytedance%2Fdeer-flow | Trendshift" style="width: 250px; height: 55px;" width="250" height="55"/></a>
-> On February 28th, 2026, DeerFlow claimed the 🏆 #1 spot on GitHub Trending following the launch of version 2. Thanks a million to our incredible community — you made this happen! 💪🔥
+## 产品定位
 
-DeerFlow (**D**eep **E**xploration and **E**fficient **R**esearch **Flow**) is an open-source **super agent harness** that orchestrates **sub-agents**, **memory**, and **sandboxes** to do almost anything — powered by **extensible skills**.
+UkuBot 主要服务企业内部团队协作场景：
 
-https://github.com/user-attachments/assets/a8bcadc4-e040-4cf2-8fda-dd768b999c18
+- 连接企业内部 Wiki，支持搜索、读取、权限查看、子页面浏览和新页面创建。
+- 连接 IM 渠道，让团队成员可以直接在聊天窗口中发起任务。
+- 提供文件、网页、沙箱执行和长期记忆能力，支持多步骤任务处理。
+- 支持通过 Python tools、MCP Server 和 skills 持续扩展内部业务能力。
 
-> [!NOTE]
-> **DeerFlow 2.0 is a ground-up rewrite.** It shares no code with v1. If you're looking for the original Deep Research framework, it's maintained on the [`1.x` branch](https://github.com/bytedance/deer-flow/tree/main-1.x) — contributions there are still welcome. Active development has moved to 2.0.
+## 目录
 
-## Official Website
-
-[<img width="2880" height="1600" alt="image" src="https://github.com/user-attachments/assets/a598c49f-3b2f-41ea-a052-05e21349188a" />](https://deerflow.tech)
-
-Learn more and see **real demos** on our [**official website**](https://deerflow.tech).
-
-## Coding Plan from ByteDance Volcengine
-
-<img width="4808" height="2400" alt="英文方舟" src="https://github.com/user-attachments/assets/2ecc7b9d-50be-4185-b1f7-5542d222fb2d" />
-
-- We strongly recommend using Doubao-Seed-2.0-Code, DeepSeek v3.2 and Kimi 2.5 to run DeerFlow
-- [Learn more](https://www.byteplus.com/en/activity/codingplan?utm_campaign=deer_flow&utm_content=deer_flow&utm_medium=devrel&utm_source=OWO&utm_term=deer_flow)
-- [中国大陆地区的开发者请点击这里](https://www.volcengine.com/activity/codingplan?utm_campaign=deer_flow&utm_content=deer_flow&utm_medium=devrel&utm_source=OWO&utm_term=deer_flow)
-
-## InfoQuest
-
-DeerFlow has newly integrated the intelligent search and crawling toolset independently developed by BytePlus--[InfoQuest (supports free online experience)](https://docs.byteplus.com/en/docs/InfoQuest/What_is_Info_Quest)
-
-<a href="https://docs.byteplus.com/en/docs/InfoQuest/What_is_Info_Quest" target="_blank">
-  <img
-    src="https://sf16-sg.tiktokcdn.com/obj/eden-sg/hubseh7bsbps/20251208-160108.png"   alt="InfoQuest_banner"
-  />
-</a>
-
----
-
-## Table of Contents
-
-- [🦌 DeerFlow - 2.0](#-deerflow---20)
-  - [Official Website](#official-website)
-  - [InfoQuest](#infoquest)
-  - [Table of Contents](#table-of-contents)
-  - [One-Line Agent Setup](#one-line-agent-setup)
-  - [Quick Start](#quick-start)
-    - [Configuration](#configuration)
-    - [Running the Application](#running-the-application)
-      - [Option 1: Docker (Recommended)](#option-1-docker-recommended)
-      - [Option 2: Local Development](#option-2-local-development)
-    - [Advanced](#advanced)
-      - [Sandbox Mode](#sandbox-mode)
+- [UkuBot](#ukubot)
+  - [产品定位](#产品定位)
+  - [目录](#目录)
+  - [一句话交给 Coding Agent 安装](#一句话交给-coding-agent-安装)
+  - [快速开始](#快速开始)
+    - [配置](#配置)
+    - [运行应用](#运行应用)
+      - [方式一：Docker（推荐）](#方式一docker推荐)
+      - [方式二：本地开发](#方式二本地开发)
+    - [进阶配置](#进阶配置)
+      - [Sandbox 模式](#sandbox-模式)
       - [MCP Server](#mcp-server)
-      - [IM Channels](#im-channels)
-      - [LangSmith Tracing](#langsmith-tracing)
-  - [From Deep Research to Super Agent Harness](#from-deep-research-to-super-agent-harness)
-  - [Core Features](#core-features)
-    - [Skills \& Tools](#skills--tools)
-      - [Claude Code Integration](#claude-code-integration)
+      - [IM 渠道](#im-渠道)
+      - [LangSmith 链路追踪](#langsmith-链路追踪)
+  - [企业内部协作 Agent](#企业内部协作-agent)
+  - [核心特性](#核心特性)
+    - [Skills 与 Tools](#skills-与-tools)
+      - [Claude Code 集成](#claude-code-集成)
     - [Sub-Agents](#sub-agents)
-    - [Sandbox \& File System](#sandbox--file-system)
+    - [Sandbox 与文件系统](#sandbox-与文件系统)
     - [Context Engineering](#context-engineering)
-    - [Long-Term Memory](#long-term-memory)
-  - [Recommended Models](#recommended-models)
-  - [Embedded Python Client](#embedded-python-client)
-  - [Documentation](#documentation)
-  - [⚠️ Security Notice](#️-security-notice)
-  - [Contributing](#contributing)
-  - [License](#license)
-  - [Acknowledgments](#acknowledgments)
-    - [Key Contributors](#key-contributors)
-  - [Star History](#star-history)
+    - [长期记忆](#长期记忆)
+  - [推荐模型](#推荐模型)
+  - [内嵌 Python Client](#内嵌-python-client)
+  - [文档](#文档)
+  - [⚠️ 安全使用](#️-安全使用)
+    - [不恰当的部署可能导致安全风险](#不恰当的部署可能导致安全风险)
+    - [安全使用建议](#安全使用建议)
+  - [许可证](#许可证)
+  - [致谢](#致谢)
 
-## One-Line Agent Setup
+## 一句话交给 Coding Agent 安装
 
-If you use Claude Code, Codex, Cursor, Windsurf, or another coding agent, you can hand it the setup instructions in one sentence:
+如果你在用 Claude Code、Codex、Cursor、Windsurf 或其他 coding agent，可以直接把下面这句话发给它：
 
 ```text
-Help me clone DeerFlow if needed, then bootstrap it for local development by following https://raw.githubusercontent.com/bytedance/deer-flow/main/Install.md
+如果还没 clone UkuBot，就先 clone，然后按照项目根目录的 Install.md 把它的本地开发环境初始化好
 ```
 
-That prompt is intended for coding agents. It tells the agent to clone the repo if needed, choose Docker when available, and stop with the exact next command plus any missing config the user still needs to provide.
+这条提示词是给 coding agent 用的。它会在需要时先 clone 仓库，优先选择 Docker，完成初始化，并在结束时告诉你下一条启动命令，以及还缺哪些配置需要你补充。
 
-## Quick Start
+## 快速开始
 
-### Configuration
+### 配置
 
-1. **Clone the DeerFlow repository**
+1. **克隆 UkuBot 仓库**
 
    ```bash
-   git clone https://github.com/bytedance/deer-flow.git
-   cd deer-flow
+   git clone <your-ukubot-repo-url>
+   cd UkuBot
    ```
 
-2. **Generate local configuration files**
+2. **生成本地配置文件**
 
-   From the project root directory (`deer-flow/`), run:
+   在项目根目录（`UkuBot/`）执行：
 
    ```bash
    make config
    ```
 
-   This command creates local configuration files based on the provided example templates.
+   这个命令会基于示例模板生成本地配置文件。
 
-3. **Configure your preferred model(s)**
+3. **配置你要使用的模型**
 
-   Edit `config.yaml` and define at least one model:
+   编辑 `config.yaml`，至少定义一个模型：
 
    ```yaml
    models:
-     - name: gpt-4                       # Internal identifier
-       display_name: GPT-4               # Human-readable name
-       use: langchain_openai:ChatOpenAI  # LangChain class path
-       model: gpt-4                      # Model identifier for API
-       api_key: $OPENAI_API_KEY          # API key (recommended: use env var)
-       max_tokens: 4096                  # Maximum tokens per request
-       temperature: 0.7                  # Sampling temperature
+     - name: gpt-4                       # 内部标识
+       display_name: GPT-4               # 展示名称
+       use: langchain_openai:ChatOpenAI  # LangChain 类路径
+       model: gpt-4                      # API 使用的模型标识
+       api_key: $OPENAI_API_KEY          # API key（推荐使用环境变量）
+       max_tokens: 4096                  # 单次请求最大 tokens
+       temperature: 0.7                  # 采样温度
 
      - name: openrouter-gemini-2.5-flash
        display_name: Gemini 2.5 Flash (OpenRouter)
        use: langchain_openai:ChatOpenAI
        model: google/gemini-2.5-flash-preview
-       api_key: $OPENAI_API_KEY          # OpenRouter still uses the OpenAI-compatible field name here
+       api_key: $OPENAI_API_KEY          # 这里 OpenRouter 依然沿用 OpenAI 兼容字段名
        base_url: https://openrouter.ai/api/v1
-
-     - name: gpt-5-responses
-       display_name: GPT-5 (Responses API)
-       use: langchain_openai:ChatOpenAI
-       model: gpt-5
-       api_key: $OPENAI_API_KEY
-       use_responses_api: true
-       output_version: responses/v1
    ```
 
-   OpenRouter and similar OpenAI-compatible gateways should be configured with `langchain_openai:ChatOpenAI` plus `base_url`. If you prefer a provider-specific environment variable name, point `api_key` at that variable explicitly (for example `api_key: $OPENROUTER_API_KEY`).
+   OpenRouter 以及类似的 OpenAI 兼容网关，建议通过 `langchain_openai:ChatOpenAI` 配合 `base_url` 来配置。如果你更想用 provider 自己的环境变量名，也可以直接把 `api_key` 指向对应变量，例如 `api_key: $OPENROUTER_API_KEY`。
 
-   To route OpenAI models through `/v1/responses`, keep using `langchain_openai:ChatOpenAI` and set `use_responses_api: true` with `output_version: responses/v1`.
+4. **为已配置的模型设置 API key**
 
-   CLI-backed provider examples:
+   可任选以下一种方式：
 
-   ```yaml
-   models:
-     - name: gpt-5.4
-       display_name: GPT-5.4 (Codex CLI)
-       use: deerflow.models.openai_codex_provider:CodexChatModel
-       model: gpt-5.4
-       supports_thinking: true
-       supports_reasoning_effort: true
-
-     - name: claude-sonnet-4.6
-       display_name: Claude Sonnet 4.6 (Claude Code OAuth)
-       use: deerflow.models.claude_provider:ClaudeChatModel
-       model: claude-sonnet-4-6
-       max_tokens: 4096
-       supports_thinking: true
-   ```
-
-   - Codex CLI reads `~/.codex/auth.json`
-   - The Codex Responses endpoint currently rejects `max_tokens` and `max_output_tokens`, so `CodexChatModel` does not expose a request-level token cap
-   - Claude Code accepts `CLAUDE_CODE_OAUTH_TOKEN`, `ANTHROPIC_AUTH_TOKEN`, `CLAUDE_CODE_OAUTH_TOKEN_FILE_DESCRIPTOR`, `CLAUDE_CODE_CREDENTIALS_PATH`, or plaintext `~/.claude/.credentials.json`
-   - ACP agent entries are separate from model providers. If you configure `acp_agents.codex`, point it at a Codex ACP adapter such as `npx -y @zed-industries/codex-acp`; the standard `codex` CLI binary is not ACP-compatible by itself
-   - On macOS, DeerFlow does not probe Keychain automatically. Export Claude Code auth explicitly if needed:
-
-   ```bash
-   eval "$(python3 scripts/export_claude_code_oauth.py --print-export)"
-   ```
-   
-4. **Set API keys for your configured model(s)**
-
-   Choose one of the following methods:
-
-- Option A: Edit the `.env` file in the project root (Recommended)
-
+- 方式 A：编辑项目根目录下的 `.env` 文件（推荐）
 
    ```bash
    TAVILY_API_KEY=your-tavily-api-key
    OPENAI_API_KEY=your-openai-api-key
-   # OpenRouter also uses OPENAI_API_KEY when your config uses langchain_openai:ChatOpenAI + base_url.
-   # Add other provider keys as needed
+   # 如果配置使用的是 langchain_openai:ChatOpenAI + base_url，OpenRouter 也会读取 OPENAI_API_KEY
+   # 其他 provider 的 key 按需补充
    INFOQUEST_API_KEY=your-infoquest-api-key
    ```
 
-- Option B: Export environment variables in your shell
+- 方式 B：在 shell 中导出环境变量
 
    ```bash
    export OPENAI_API_KEY=your-openai-api-key
    ```
 
-   For CLI-backed providers:
-   - Codex CLI: `~/.codex/auth.json`
-   - Claude Code OAuth: explicit env/file handoff or `~/.claude/.credentials.json`
-
-- Option C: Edit `config.yaml` directly (Not recommended for production)
+- 方式 C：直接编辑 `config.yaml`（不建议用于生产环境）
 
    ```yaml
    models:
      - name: gpt-4
-       api_key: your-actual-api-key-here  # Replace placeholder
+       api_key: your-actual-api-key-here  # 替换为真实 key
    ```
 
-### Running the Application
+### 运行应用
 
-#### Option 1: Docker (Recommended)
+#### 方式一：Docker（推荐）
 
-**Development** (hot-reload, source mounts):
+**开发模式**（支持热更新，挂载源码）：
 
 ```bash
-make docker-init    # Pull sandbox image (only once or when image updates)
-make docker-start   # Start services (auto-detects sandbox mode from config.yaml)
+make docker-init    # 拉取 sandbox 镜像（首次运行或镜像更新时执行）
+make docker-start   # 启动服务（会根据 config.yaml 自动判断 sandbox 模式）
 ```
 
-`make docker-start` starts `provisioner` only when `config.yaml` uses provisioner mode (`sandbox.use: deerflow.community.aio_sandbox:AioSandboxProvider` with `provisioner_url`).
+如果 `config.yaml` 使用的是 provisioner 模式（`sandbox.use: deerflow.community.aio_sandbox:AioSandboxProvider` 且配置了 `provisioner_url`），`make docker-start` 才会启动 `provisioner`。
 
-Docker builds use the upstream `uv` registry by default. If you need faster mirrors in restricted networks, export `UV_INDEX_URL=https://pypi.tuna.tsinghua.edu.cn/simple` and `NPM_REGISTRY=https://registry.npmmirror.com` before running `make docker-init` or `make docker-start`.
-
-Backend processes automatically pick up `config.yaml` changes on the next config access, so model metadata updates do not require a manual restart during development.
-
-> [!TIP]
-> On Linux, if Docker-based commands fail with `permission denied while trying to connect to the Docker daemon socket at unix:///var/run/docker.sock`, add your user to the `docker` group and re-login before retrying. See [CONTRIBUTING.md](CONTRIBUTING.md#linux-docker-daemon-permission-denied) for the full fix.
-
-**Production** (builds images locally, mounts runtime config and data):
+**生产模式**（本地构建镜像，并挂载运行期配置与数据）：
 
 ```bash
-make up     # Build images and start all production services
-make down   # Stop and remove containers
+make up     # 构建镜像并启动全部生产服务
+make down   # 停止并移除容器
 ```
 
 > [!NOTE]
-> The LangGraph agent server currently runs via `langgraph dev` (the open-source CLI server).
+> 当前 LangGraph agent server 通过开源 CLI 服务 `langgraph dev` 运行。
 
-Access: http://localhost:2026
+访问地址：http://localhost:2026
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for detailed Docker development guide.
+更完整的 Docker 开发说明见 [CONTRIBUTING.md](CONTRIBUTING.md)。
 
-#### Option 2: Local Development
+#### 方式二：本地开发
 
-If you prefer running services locally:
+如果你更希望直接在本地启动各个服务：
 
-Prerequisite: complete the "Configuration" steps above first (`make config` and model API keys). `make dev` requires a valid configuration file (defaults to `config.yaml` in the project root; can be overridden via `DEER_FLOW_CONFIG_PATH`).
+前提：先完成上面的“配置”步骤（`make config` 和模型 API key 配置）。`make dev` 需要有效配置文件，默认读取项目根目录下的 `config.yaml`，也可以通过 `DEER_FLOW_CONFIG_PATH` 覆盖。
 
-1. **Check prerequisites**:
+1. **检查依赖环境**：
    ```bash
-   make check  # Verifies Node.js 22+, pnpm, uv, nginx
+   make check  # 校验 Node.js 22+、pnpm、uv、nginx
    ```
 
-2. **Install dependencies**:
+2. **安装依赖**：
    ```bash
-   make install  # Install backend + frontend dependencies
+   make install  # 安装 backend + frontend 依赖
    ```
 
-3. **(Optional) Pre-pull sandbox image**:
+3. **（可选）预拉取 sandbox 镜像**：
    ```bash
-   # Recommended if using Docker/Container-based sandbox
+   # 如果使用 Docker / Container sandbox，建议先执行
    make setup-sandbox
    ```
 
-4. **(Optional) Load sample memory data for local review**:
-   ```bash
-   python scripts/load_memory_sample.py
-   ```
-   This copies the sample fixture into the default local runtime memory file so reviewers can immediately test `Settings > Memory`.
-   See [backend/docs/MEMORY_SETTINGS_REVIEW.md](backend/docs/MEMORY_SETTINGS_REVIEW.md) for the shortest review flow.
-
-5. **Start services**:
+4. **启动服务**：
    ```bash
    make dev
    ```
 
-6. **Access**: http://localhost:2026
+5. **访问地址**：http://localhost:2026
 
-### Advanced
-#### Sandbox Mode
+### 进阶配置
+#### Sandbox 模式
 
-DeerFlow supports multiple sandbox execution modes:
-- **Local Execution** (runs sandbox code directly on the host machine)
-- **Docker Execution** (runs sandbox code in isolated Docker containers)
-- **Docker Execution with Kubernetes** (runs sandbox code in Kubernetes pods via provisioner service)
+UkuBot 支持多种 sandbox 执行方式：
+- **本地执行**（直接在宿主机上运行 sandbox 代码）
+- **Docker 执行**（在隔离的 Docker 容器里运行 sandbox 代码）
+- **Docker + Kubernetes 执行**（通过 provisioner 服务在 Kubernetes Pod 中运行 sandbox 代码）
 
-For Docker development, service startup follows `config.yaml` sandbox mode. In Local/Docker modes, `provisioner` is not started.
+Docker 开发时，服务启动行为会遵循 `config.yaml` 里的 sandbox 模式。在 Local / Docker 模式下，不会启动 `provisioner`。
 
-See the [Sandbox Configuration Guide](backend/docs/CONFIGURATION.md#sandbox) to configure your preferred mode.
+如果要配置你自己的模式，参见 [Sandbox 配置指南](backend/docs/CONFIGURATION.md#sandbox)。
 
 #### MCP Server
 
-DeerFlow supports configurable MCP servers and skills to extend its capabilities.
-For HTTP/SSE MCP servers, OAuth token flows are supported (`client_credentials`, `refresh_token`).
-See the [MCP Server Guide](backend/docs/MCP_SERVER.md) for detailed instructions.
+UkuBot 支持可配置的 MCP Server 和 skills，用来扩展能力。
+对于 HTTP/SSE MCP Server，还支持 OAuth token 流程（`client_credentials`、`refresh_token`）。
+详细说明见 [MCP Server 指南](backend/docs/MCP_SERVER.md)。
 
-#### IM Channels
+#### IM 渠道
 
-DeerFlow supports receiving tasks from messaging apps. Channels auto-start when configured — no public IP required for any of them.
+UkuBot 支持从即时通讯应用接收任务。只要配置完成，对应渠道会自动启动，而且都不需要公网 IP。
 
-| Channel | Transport | Difficulty |
+| 渠道 | 传输方式 | 上手难度 |
 |---------|-----------|------------|
-| Telegram | Bot API (long-polling) | Easy |
-| Slack | Socket Mode | Moderate |
-| Feishu / Lark | WebSocket | Moderate |
+| Telegram | Bot API（long-polling） | 简单 |
+| Slack | Socket Mode | 中等 |
+| Feishu / Lark | WebSocket | 中等 |
 
-**Configuration in `config.yaml`:**
+**`config.yaml` 中的配置示例：**
 
 ```yaml
 channels:
-  # LangGraph Server URL (default: http://localhost:2024)
+  # LangGraph Server URL（默认：http://localhost:2024）
   langgraph_url: http://localhost:2024
-  # Gateway API URL (default: http://localhost:8001)
+  # Gateway API URL（默认：http://localhost:8001）
   gateway_url: http://localhost:8001
 
-  # Optional: global session defaults for all mobile channels
+  # 可选：所有移动端渠道共用的全局 session 默认值
   session:
-    assistant_id: lead_agent  # or a custom agent name; custom agents are routed via lead_agent + agent_name
+    assistant_id: lead_agent  # 也可以填自定义 agent 名；渠道层会自动转换为 lead_agent + agent_name
     config:
       recursion_limit: 100
     context:
@@ -325,23 +236,23 @@ channels:
     enabled: true
     app_id: $FEISHU_APP_ID
     app_secret: $FEISHU_APP_SECRET
-    # domain: https://open.feishu.cn       # China (default)
-    # domain: https://open.larksuite.com   # International
+    # domain: https://open.feishu.cn       # 国内版（默认）
+    # domain: https://open.larksuite.com   # 国际版
 
   slack:
     enabled: true
     bot_token: $SLACK_BOT_TOKEN     # xoxb-...
-    app_token: $SLACK_APP_TOKEN     # xapp-... (Socket Mode)
-    allowed_users: []               # empty = allow all
+    app_token: $SLACK_APP_TOKEN     # xapp-...（Socket Mode）
+    allowed_users: []               # 留空表示允许所有人
 
   telegram:
     enabled: true
     bot_token: $TELEGRAM_BOT_TOKEN
-    allowed_users: []               # empty = allow all
+    allowed_users: []               # 留空表示允许所有人
 
-    # Optional: per-channel / per-user session settings
+    # 可选：按渠道 / 按用户单独覆盖 session 配置
     session:
-      assistant_id: mobile-agent  # custom agent names are also supported here
+      assistant_id: mobile-agent  # 这里同样支持自定义 agent 名
       context:
         thinking_enabled: false
       users:
@@ -354,11 +265,11 @@ channels:
             subagent_enabled: true
 ```
 
-Notes:
-- `assistant_id: lead_agent` calls the default LangGraph assistant directly.
-- If `assistant_id` is set to a custom agent name, DeerFlow still routes through `lead_agent` and injects that value as `agent_name`, so the custom agent's SOUL/config takes effect for IM channels.
+说明：
+- `assistant_id: lead_agent` 会直接调用默认的 LangGraph assistant。
+- 如果 `assistant_id` 填的是自定义 agent 名，UkuBot 仍然会走 `lead_agent`，同时把该值注入为 `agent_name`，这样 IM 渠道也会生效对应 agent 的 SOUL 和配置。
 
-Set the corresponding API keys in your `.env` file:
+在 `.env` 里设置对应的 API key：
 
 ```bash
 # Telegram
@@ -373,47 +284,45 @@ FEISHU_APP_ID=cli_xxxx
 FEISHU_APP_SECRET=your_app_secret
 ```
 
-**Telegram Setup**
+**Telegram 配置**
 
-1. Chat with [@BotFather](https://t.me/BotFather), send `/newbot`, and copy the HTTP API token.
-2. Set `TELEGRAM_BOT_TOKEN` in `.env` and enable the channel in `config.yaml`.
+1. 打开 [@BotFather](https://t.me/BotFather)，发送 `/newbot`，复制生成的 HTTP API token。
+2. 在 `.env` 中设置 `TELEGRAM_BOT_TOKEN`，并在 `config.yaml` 里启用该渠道。
 
-**Slack Setup**
+**Slack 配置**
 
-1. Create a Slack App at [api.slack.com/apps](https://api.slack.com/apps) → Create New App → From scratch.
-2. Under **OAuth & Permissions**, add Bot Token Scopes: `app_mentions:read`, `chat:write`, `im:history`, `im:read`, `im:write`, `files:write`.
-3. Enable **Socket Mode** → generate an App-Level Token (`xapp-…`) with `connections:write` scope.
-4. Under **Event Subscriptions**, subscribe to bot events: `app_mention`, `message.im`.
-5. Set `SLACK_BOT_TOKEN` and `SLACK_APP_TOKEN` in `.env` and enable the channel in `config.yaml`.
+1. 前往 [api.slack.com/apps](https://api.slack.com/apps) 创建 Slack App：Create New App → From scratch。
+2. 在 **OAuth & Permissions** 中添加 Bot Token Scopes：`app_mentions:read`、`chat:write`、`im:history`、`im:read`、`im:write`、`files:write`。
+3. 启用 **Socket Mode**，生成带 `connections:write` 权限的 App-Level Token（`xapp-...`）。
+4. 在 **Event Subscriptions** 中订阅 bot events：`app_mention`、`message.im`。
+5. 在 `.env` 中设置 `SLACK_BOT_TOKEN` 和 `SLACK_APP_TOKEN`，并在 `config.yaml` 中启用该渠道。
 
-**Feishu / Lark Setup**
+**Feishu / Lark 配置**
 
-1. Create an app on [Feishu Open Platform](https://open.feishu.cn/) → enable **Bot** capability.
-2. Add permissions: `im:message`, `im:message.p2p_msg:readonly`, `im:resource`.
-3. Under **Events**, subscribe to `im.message.receive_v1` and select **Long Connection** mode.
-4. Copy the App ID and App Secret. Set `FEISHU_APP_ID` and `FEISHU_APP_SECRET` in `.env` and enable the channel in `config.yaml`.
+1. 在 [飞书开放平台](https://open.feishu.cn/) 创建应用，并启用 **Bot** 能力。
+2. 添加权限：`im:message`、`im:message.p2p_msg:readonly`、`im:resource`。
+3. 在 **事件订阅** 中订阅 `im.message.receive_v1`，连接方式选择 **长连接**。
+4. 复制 App ID 和 App Secret，在 `.env` 中设置 `FEISHU_APP_ID` 和 `FEISHU_APP_SECRET`，并在 `config.yaml` 中启用该渠道。
 
-When DeerFlow runs in Docker Compose, IM channels execute inside the `gateway` container. In that case, do not point `channels.langgraph_url` or `channels.gateway_url` at `localhost`; use container service names such as `http://langgraph:2024` and `http://gateway:8001`, or set `DEER_FLOW_CHANNELS_LANGGRAPH_URL` and `DEER_FLOW_CHANNELS_GATEWAY_URL`.
+**命令**
 
-**Commands**
+渠道连接完成后，你可以直接在聊天窗口里和 UkuBot 交互：
 
-Once a channel is connected, you can interact with DeerFlow directly from the chat:
-
-| Command | Description |
+| 命令 | 说明 |
 |---------|-------------|
-| `/new` | Start a new conversation |
-| `/status` | Show current thread info |
-| `/models` | List available models |
-| `/memory` | View memory |
-| `/help` | Show help |
+| `/new` | 开启新对话 |
+| `/status` | 查看当前 thread 信息 |
+| `/models` | 列出可用模型 |
+| `/memory` | 查看 memory |
+| `/help` | 查看帮助 |
 
-> Messages without a command prefix are treated as regular chat — DeerFlow creates a thread and responds conversationally.
+> 没有命令前缀的消息会被当作普通聊天处理。UkuBot 会自动创建 thread，并以对话方式回复。
 
-#### LangSmith Tracing
+#### LangSmith 链路追踪
 
-DeerFlow has built-in [LangSmith](https://smith.langchain.com) integration for observability. When enabled, all LLM calls, agent runs, and tool executions are traced and visible in the LangSmith dashboard.
+UkuBot 内置了 [LangSmith](https://smith.langchain.com) 集成，用于可观测性。启用后，所有 LLM 调用、agent 运行和工具执行都会被追踪，并在 LangSmith 仪表盘中展示。
 
-Add the following to your `.env` file:
+在 `.env` 文件中添加以下配置：
 
 ```bash
 LANGSMITH_TRACING=true
@@ -422,38 +331,34 @@ LANGSMITH_API_KEY=lsv2_pt_xxxxxxxxxxxxxxxx
 LANGSMITH_PROJECT=xxx
 ```
 
-For Docker deployments, tracing is disabled by default. Set `LANGSMITH_TRACING=true` and `LANGSMITH_API_KEY` in your `.env` to enable it.
+Docker 部署时，追踪默认关闭。在 `.env` 中设置 `LANGSMITH_TRACING=true` 和 `LANGSMITH_API_KEY` 即可启用。
 
-## From Deep Research to Super Agent Harness
+## 企业内部协作 Agent
 
-DeerFlow started as a Deep Research framework — and the community ran with it. Since launch, developers have pushed it far beyond research: building data pipelines, generating slide decks, spinning up dashboards, automating content workflows. Things we never anticipated.
+UkuBot 的目标不是做一个单纯的问答机器人，而是成为企业内部协作的统一 Agent 入口。团队成员可以通过 IM 对话发起任务，也可以让 agent 读取 Wiki、整理资料、处理文件、沉淀文档，并在需要时调用内部工具完成具体操作。
 
-That told us something important: DeerFlow wasn't just a research tool. It was a **harness** — a runtime that gives agents the infrastructure to actually get work done.
+它的底层仍然保留了通用 agent harness 的能力：模型编排、工具调用、sandbox 执行、长期记忆、skills 扩展和 sub-agents 并行处理。上层则围绕企业知识库、研发协作、接口文档、需求沉淀和日常自动化流程做集成。
 
-So we rebuilt it from scratch.
+这意味着 UkuBot 可以先服务企业内部的知识检索和协作流程，再逐步接入更多业务系统，形成面向组织的可扩展工作台。
 
-DeerFlow 2.0 is no longer a framework you wire together. It's a super agent harness — batteries included, fully extensible. Built on LangGraph and LangChain, it ships with everything an agent needs out of the box: a filesystem, memory, skills, sandbox-aware execution, and the ability to plan and spawn sub-agents for complex, multi-step tasks.
+## 核心特性
 
-Use it as-is. Or tear it apart and make it yours.
+### Skills 与 Tools
 
-## Core Features
+Skills 是 UkuBot 扩展复杂工作流的关键。
 
-### Skills & Tools
+标准的 Agent Skill 是一种结构化能力模块，通常就是一个 Markdown 文件，里面定义了工作流、最佳实践，以及相关的参考资源。UkuBot 可以使用内置 skills 覆盖研究、报告生成、演示文稿制作、网页生成、图像和视频生成等场景，也可以加入企业内部专用 skills，把多个 skills 组合成复合工作流。
 
-Skills are what make DeerFlow do *almost anything*.
+Skills 采用按需渐进加载，不会一次性把所有内容都塞进上下文。只有任务确实需要时才加载，这样能把上下文窗口控制得更干净，也更适合对 token 比较敏感的模型。
 
-A standard Agent Skill is a structured capability module — a Markdown file that defines a workflow, best practices, and references to supporting resources. DeerFlow ships with built-in skills for research, report generation, slide creation, web pages, image and video generation, and more. But the real power is extensibility: add your own skills, replace the built-in ones, or combine them into compound workflows.
+通过 Gateway 安装 `.skill` 压缩包时，UkuBot 会接受标准的可选 frontmatter 元数据，比如 `version`、`author`、`compatibility`，不会把本来合法的外部 skill 拒之门外。
 
-Skills are loaded progressively — only when the task needs them, not all at once. This keeps the context window lean and makes DeerFlow work well even with token-sensitive models.
+Tools 也是同样的思路。UkuBot 自带一组核心工具：网页搜索、网页抓取、文件操作、bash 执行；同时新增了企业 Wiki 工具，并支持通过 MCP Server 和 Python 函数继续扩展内部业务能力。
 
-When you install `.skill` archives through the Gateway, DeerFlow accepts standard optional frontmatter metadata such as `version`, `author`, and `compatibility` instead of rejecting otherwise valid external skills.
+Gateway 生成后续建议时，现在会先把普通字符串输出和 block/list 风格的富文本内容统一归一化，再去解析 JSON 数组响应，因此不同 provider 的内容包装方式不会再悄悄把建议吞掉。
 
-Tools follow the same philosophy. DeerFlow comes with a core toolset — web search, web fetch, file operations, bash execution — and supports custom tools via MCP servers and Python functions. Swap anything. Add anything.
-
-Gateway-generated follow-up suggestions now normalize both plain-string model output and block/list-style rich content before parsing the JSON array response, so provider-specific content wrappers do not silently drop suggestions.
-
-```
-# Paths inside the sandbox container
+```text
+# sandbox 容器内的路径
 /mnt/skills/public
 ├── research/SKILL.md
 ├── report-generation/SKILL.md
@@ -462,91 +367,87 @@ Gateway-generated follow-up suggestions now normalize both plain-string model ou
 └── image-generation/SKILL.md
 
 /mnt/skills/custom
-└── your-custom-skill/SKILL.md      ← yours
+└── your-custom-skill/SKILL.md      ← 你的 skill
 ```
 
-#### Claude Code Integration
+#### Claude Code 集成
 
-The `claude-to-deerflow` skill lets you interact with a running DeerFlow instance directly from [Claude Code](https://docs.anthropic.com/en/docs/claude-code). Send research tasks, check status, manage threads — all without leaving the terminal.
+借助 `claude-to-deerflow` skill，你可以直接在 [Claude Code](https://docs.anthropic.com/en/docs/claude-code) 里和正在运行的 UkuBot 实例交互。不用离开终端，就能下发研究任务、查看状态、管理 threads。
 
-**Install the skill**:
+**安装这个 skill：**
 
 ```bash
-npx skills add https://github.com/bytedance/deer-flow --skill claude-to-deerflow
+npx skills add <your-ukubot-repo-url> --skill claude-to-deerflow
 ```
 
-Then make sure DeerFlow is running (default at `http://localhost:2026`) and use the `/claude-to-deerflow` command in Claude Code.
+然后确认 UkuBot 已经启动（默认地址是 `http://localhost:2026`），在 Claude Code 里使用 `/claude-to-deerflow` 命令即可。
 
-**What you can do**:
-- Send messages to DeerFlow and get streaming responses
-- Choose execution modes: flash (fast), standard, pro (planning), ultra (sub-agents)
-- Check DeerFlow health, list models/skills/agents
-- Manage threads and conversation history
-- Create and manage scheduled agent tasks from the workspace or conversation tools
-- Upload files for analysis
+**你可以做的事情包括：**
+- 给 UkuBot 发送消息，并接收流式响应
+- 选择执行模式：flash（更快）、standard、pro（规划模式）、ultra（sub-agents 模式）
+- 检查 UkuBot 健康状态，列出 models / skills / agents
+- 管理 threads 和会话历史
+- 在工作区或对话工具中创建和管理定时 agent 任务
+- 上传文件做分析
 
-**Environment variables** (optional, for custom endpoints):
+**环境变量**（可选，用于自定义端点）：
 
 ```bash
-DEERFLOW_URL=http://localhost:2026            # Unified proxy base URL
+DEERFLOW_URL=http://localhost:2026            # 统一代理基地址
 DEERFLOW_GATEWAY_URL=http://localhost:2026    # Gateway API
 DEERFLOW_LANGGRAPH_URL=http://localhost:2026/api/langgraph  # LangGraph API
 ```
 
-See [`skills/public/claude-to-deerflow/SKILL.md`](skills/public/claude-to-deerflow/SKILL.md) for the full API reference.
+完整 API 说明见 [`skills/public/claude-to-deerflow/SKILL.md`](skills/public/claude-to-deerflow/SKILL.md)。
 
 ### Sub-Agents
 
-Complex tasks rarely fit in a single pass. DeerFlow decomposes them.
+复杂任务通常不可能一次完成，UkuBot 会先拆解，再执行。
 
-The lead agent can spawn sub-agents on the fly — each with its own scoped context, tools, and termination conditions. Sub-agents run in parallel when possible, report back structured results, and the lead agent synthesizes everything into a coherent output.
+lead agent 可以按需动态拉起 sub-agents。每个 sub-agent 都有自己独立的上下文、工具和终止条件。只要条件允许，它们就会并行运行，返回结构化结果，最后再由 lead agent 汇总成一份完整输出。
 
-This is how DeerFlow handles tasks that take minutes to hours: a research task might fan out into a dozen sub-agents, each exploring a different angle, then converge into a single report — or a website — or a slide deck with generated visuals. One harness, many hands.
+这也是 UkuBot 能处理从几分钟到几小时任务的原因。比如一次内部资料梳理，可以拆成多个 sub-agents，分别读取 Wiki、分析文件、整理结论，最后合并成一份可交付的文档或页面。
 
-### Sandbox & File System
+### Sandbox 与文件系统
 
-DeerFlow doesn't just *talk* about doing things. It has its own computer.
+UkuBot 不只是“会说它能做”，它是真的有一台自己的“电脑”。
 
-Each task gets its own execution environment with a full filesystem view — skills, workspace, uploads, outputs. The agent reads, writes, and edits files. It can view images and, when configured safely, execute shell commands.
+每个任务都运行在隔离的 Docker 容器里，里面有完整的文件系统，包括 skills、workspace、uploads、outputs。agent 可以读写和编辑文件，可以执行 bash 命令和代码，也可以查看图片。整个过程都在 sandbox 内完成，可审计、会隔离，不会在不同 session 之间互相污染。
 
-With `AioSandboxProvider`, shell execution runs inside isolated containers. With `LocalSandboxProvider`, file tools still map to per-thread directories on the host, but host `bash` is disabled by default because it is not a secure isolation boundary. Re-enable host bash only for fully trusted local workflows.
+这就是“带工具的聊天机器人”和“真正有执行环境的 agent”之间的差别。
 
-This is the difference between a chatbot with tool access and an agent with an actual execution environment.
-
-```
-# Paths inside the sandbox container
+```text
+# sandbox 容器内的路径
 /mnt/user-data/
-├── uploads/          ← your files
-├── workspace/        ← agents' working directory
-└── outputs/          ← final deliverables
+├── uploads/          ← 你的文件
+├── workspace/        ← agents 的工作目录
+└── outputs/          ← 最终交付物
 ```
 
 ### Context Engineering
 
-**Isolated Sub-Agent Context**: Each sub-agent runs in its own isolated context. This means that the sub-agent will not be able to see the context of the main agent or other sub-agents. This is important to ensure that the sub-agent is able to focus on the task at hand and not be distracted by the context of the main agent or other sub-agents.
+**隔离的 Sub-Agent Context**：每个 sub-agent 都在自己独立的上下文里运行。它看不到主 agent 的上下文，也看不到其他 sub-agents 的上下文。这样做的目的很直接，就是让它只聚焦当前任务，不被无关信息干扰。
 
-**Summarization**: Within a session, DeerFlow manages context aggressively — summarizing completed sub-tasks, offloading intermediate results to the filesystem, compressing what's no longer immediately relevant. This lets it stay sharp across long, multi-step tasks without blowing the context window.
+**摘要压缩**：在单个 session 内，UkuBot 会比较积极地管理上下文，包括总结已完成的子任务、把中间结果转存到文件系统、压缩暂时不重要的信息。这样在长链路、多步骤任务里，它也能保持聚焦，而不会轻易把上下文窗口打爆。
 
-### Long-Term Memory
+### 长期记忆
 
-Most agents forget everything the moment a conversation ends. DeerFlow remembers.
+大多数 agents 会在对话结束后把一切都忘掉，UkuBot 不一样。
 
-Across sessions, DeerFlow builds a persistent memory of your profile, preferences, and accumulated knowledge. The more you use it, the better it knows you — your writing style, your technical stack, your recurring workflows. Memory is stored locally and stays under your control.
+跨 session 使用时，UkuBot 会逐步积累关于你的持久 memory，包括你的个人偏好、知识背景，以及长期沉淀下来的工作习惯。你用得越多，它越了解你的写作风格、技术栈和重复出现的工作流。memory 保存在本地，控制权也始终在你手里。
 
-Memory updates now skip duplicate fact entries at apply time, so repeated preferences and context do not accumulate endlessly across sessions.
+## 推荐模型
 
-## Recommended Models
+UkuBot 对模型没有强绑定，只要实现了 OpenAI 兼容 API 的 LLM，理论上都可以接入。不过在下面这些能力上表现更强的模型，通常会更适合 UkuBot：
 
-DeerFlow is model-agnostic — it works with any LLM that implements the OpenAI-compatible API. That said, it performs best with models that support:
+- **长上下文窗口**（100k+ tokens），适合深度研究和多步骤任务
+- **推理能力**，适合自适应规划和复杂拆解
+- **多模态输入**，适合理解图片和视频
+- **稳定的 tool use 能力**，适合可靠的函数调用和结构化输出
 
-- **Long context windows** (100k+ tokens) for deep research and multi-step tasks
-- **Reasoning capabilities** for adaptive planning and complex decomposition
-- **Multimodal inputs** for image understanding and video comprehension
-- **Strong tool-use** for reliable function calling and structured outputs
+## 内嵌 Python Client
 
-## Embedded Python Client
-
-DeerFlow can be used as an embedded Python library without running the full HTTP services. The `DeerFlowClient` provides direct in-process access to all agent and Gateway capabilities, returning the same response schemas as the HTTP Gateway API. The HTTP Gateway also exposes `DELETE /api/threads/{thread_id}` to remove DeerFlow-managed local thread data after the LangGraph thread itself has been deleted:
+UkuBot 也可以作为内嵌的 Python 库使用，不必启动完整的 HTTP 服务。`DeerFlowClient` 提供了进程内的直接访问方式，覆盖所有 agent 和 Gateway 能力，返回的数据结构与 HTTP Gateway API 保持一致：
 
 ```python
 from deerflow.client import DeerFlowClient
@@ -556,79 +457,52 @@ client = DeerFlowClient()
 # Chat
 response = client.chat("Analyze this paper for me", thread_id="my-thread")
 
-# Streaming (LangGraph SSE protocol: values, messages-tuple, end)
+# Streaming（LangGraph SSE 协议：values、messages-tuple、end）
 for event in client.stream("hello"):
     if event.type == "messages-tuple" and event.data.get("type") == "ai":
         print(event.data["content"])
 
-# Configuration & management — returns Gateway-aligned dicts
+# 配置与管理：返回值与 Gateway 对齐的 dict
 models = client.list_models()        # {"models": [...]}
 skills = client.list_skills()        # {"skills": [...]}
 client.update_skill("web-search", enabled=True)
 client.upload_files("thread-1", ["./report.pdf"])  # {"success": True, "files": [...]}
 ```
 
-All dict-returning methods are validated against Gateway Pydantic response models in CI (`TestGatewayConformance`), ensuring the embedded client stays in sync with the HTTP API schemas. See `backend/packages/harness/deerflow/client.py` for full API documentation.
+所有返回 dict 的方法都会在 CI 中通过 Gateway 的 Pydantic 响应模型校验（`TestGatewayConformance`），以确保内嵌 client 始终和 HTTP API schema 保持同步。完整 API 说明见 `backend/packages/harness/deerflow/client.py`。
 
-## Documentation
+## 文档
 
-- [Contributing Guide](CONTRIBUTING.md) - Development environment setup and workflow
-- [Configuration Guide](backend/docs/CONFIGURATION.md) - Setup and configuration instructions
-- [Architecture Overview](backend/CLAUDE.md) - Technical architecture details
-- [Backend Architecture](backend/README.md) - Backend architecture and API reference
-- [Project Status](PROJECT_STATUS.md) - Current progress of the multi-user server upgrade in this fork
-- [Project Status (Chinese)](PROJECT_STATUS_zh.md) - Chinese summary of the current multi-user server upgrade progress
-- [Multi-User Server Upgrade Index](docs/multi-user-server/README.md) - Step-by-step implementation status and next work items
+- [贡献指南](CONTRIBUTING.md) - 开发环境搭建与协作流程
+- [配置指南](backend/docs/CONFIGURATION.md) - 安装与配置说明
+- [架构概览](backend/CLAUDE.md) - 技术架构说明
+- [后端架构](backend/README.md) - 后端架构与 API 参考
 
-## ⚠️ Security Notice
+## ⚠️ 安全使用
 
-### Improper Deployment May Introduce Security Risks
+### 不恰当的部署可能导致安全风险
 
-DeerFlow has key high-privilege capabilities including **system command execution, resource operations, and business logic invocation**, and is designed by default to be **deployed in a local trusted environment (accessible only via the 127.0.0.1 loopback interface)**. If you deploy the agent in untrusted environments — such as LAN networks, public cloud servers, or other multi-endpoint accessible environments — without strict security measures, it may introduce security risks, including:
+UkuBot 具备**系统指令执行、资源操作、业务逻辑调用**等关键高权限能力，默认设计为**部署在本地可信环境（仅本机 127.0.0.1 回环访问）**。若您将 agent 部署至不可信局域网、公网云服务器等可被多终端访问的网络环境，且未采取严格的安全防护措施，可能导致安全风险，例如：
 
-- **Unauthorized illegal invocation**: Agent functionality could be discovered by unauthorized third parties or malicious internet scanners, triggering bulk unauthorized requests that execute high-risk operations such as system commands and file read/write, potentially causing serious security consequences.
-- **Compliance and legal risks**: If the agent is illegally invoked to conduct cyberattacks, data theft, or other illegal activities, it may result in legal liability and compliance risks.
+- **未授权的非法调用**：agent 功能被未授权的第三方、公网恶意扫描程序探测到，进而发起批量非法调用请求，执行系统命令、文件读写等高危操作，可能导致安全后果。
+- **合规与法律风险**：若 agent 被非法调用用于实施网络攻击、信息窃取等违法违规行为，可能产生法律责任与合规风险。
 
-### Security Recommendations
+### 安全使用建议
 
-**Note: We strongly recommend deploying DeerFlow in a local trusted network environment.** If you need cross-device or cross-network deployment, you must implement strict security measures, such as:
+**注意：建议您将 UkuBot 部署在本地可信的网络环境下。** 若您有跨设备、跨网络的部署需求，必须加入严格的安全措施。例如，采取如下手段：
 
-- **IP allowlist**: Use `iptables`, or deploy hardware firewalls / switches with Access Control Lists (ACL), to **configure IP allowlist rules** and deny access from all other IP addresses.
-- **Authentication gateway**: Configure a reverse proxy (e.g., nginx) and **enable strong pre-authentication**, blocking any unauthenticated access.
-- **Network isolation**: Where possible, place the agent and trusted devices in the **same dedicated VLAN**, isolated from other network devices.
-- **Stay updated**: Continue to follow DeerFlow's security feature updates.
+- **设置访问 IP 白名单**：使用 `iptables`，或部署硬件防火墙 / 带访问控制（ACL）功能的交换机等，**配置规则设置 IP 白名单**，拒绝其他所有 IP 进行访问。
+- **前置身份验证**：配置反向代理（nginx 等），并**开启高强度的前置身份验证功能**，禁止无任何身份验证的访问。
+- **网络隔离**：若有可能，建议将 agent 和可信设备划分到**同一个专用 VLAN**，与其他网络设备做隔离。
+- **持续关注项目更新**：请持续关注 UkuBot 项目的安全功能更新。
 
-## Contributing
 
-We welcome contributions! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for development setup, workflow, and guidelines.
+## 许可证
 
-Regression coverage includes Docker sandbox mode detection and provisioner kubeconfig-path handling tests in `backend/tests/`.
-Gateway artifact serving now forces active web content types (`text/html`, `application/xhtml+xml`, `image/svg+xml`) to download as attachments instead of inline rendering, reducing XSS risk for generated artifacts.
+本项目基于 DeerFlow 二次开发，并沿用 [MIT License](./LICENSE)。
 
-## License
+## 致谢
 
-This project is open source and available under the [MIT License](./LICENSE).
+UkuBot 基于 DeerFlow 的核心 agent harness 架构开发，基础框架来自 DeerFlow。我们在此基础上面向企业内部协作场景进行了定制和扩展，包括内部 Wiki、IM 渠道和企业工具集成。
 
-## Acknowledgments
-
-DeerFlow is built upon the incredible work of the open-source community. We are deeply grateful to all the projects and contributors whose efforts have made DeerFlow possible. Truly, we stand on the shoulders of giants.
-
-We would like to extend our sincere appreciation to the following projects for their invaluable contributions:
-
-- **[LangChain](https://github.com/langchain-ai/langchain)**: Their exceptional framework powers our LLM interactions and chains, enabling seamless integration and functionality.
-- **[LangGraph](https://github.com/langchain-ai/langgraph)**: Their innovative approach to multi-agent orchestration has been instrumental in enabling DeerFlow's sophisticated workflows.
-
-These projects exemplify the transformative power of open-source collaboration, and we are proud to build upon their foundations.
-
-### Key Contributors
-
-A heartfelt thank you goes out to the core authors of `DeerFlow`, whose vision, passion, and dedication have brought this project to life:
-
-- **[Daniel Walnut](https://github.com/hetaoBackend/)**
-- **[Henry Li](https://github.com/magiccube/)**
-
-Your unwavering commitment and expertise have been the driving force behind DeerFlow's success. We are honored to have you at the helm of this journey.
-
-## Star History
-
-[![Star History Chart](https://api.star-history.com/svg?repos=bytedance/deer-flow&type=Date)](https://star-history.com/#bytedance/deer-flow&Date)
+感谢 DeerFlow 项目及其贡献者提供的基础能力，也感谢 LangChain、LangGraph 等开源项目对 UkuBot 底层能力的支撑。
