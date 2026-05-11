@@ -174,6 +174,7 @@ Organize tools into logical groups:
 tool_groups:
   - name: web          # Web browsing and search
   - name: wiki         # Confluence Wiki tools
+  - name: maxcompute   # Alibaba Cloud MaxCompute read-only tools
   - name: file:read    # Read-only file operations
   - name: file:write   # Write file operations
   - name: bash         # Shell command execution
@@ -196,6 +197,7 @@ tools:
 - `web_search` - Search the web (Tavily)
 - `web_fetch` - Fetch web pages (Jina AI)
 - `wiki_search_pages`, `wiki_get_page`, `wiki_get_page_permissions`, `wiki_list_children`, `wiki_create_page` - Confluence Wiki integration. See [CONFLUENCE_WIKI_TOOLS.md](CONFLUENCE_WIKI_TOOLS.md).
+- `maxcompute_list_tables`, `maxcompute_describe_table`, `maxcompute_sample_table`, `maxcompute_query` - Alibaba Cloud MaxCompute read-only query integration. See [MAXCOMPUTE_TOOLS.md](MAXCOMPUTE_TOOLS.md).
 - `ls` - List directory contents
 - `read_file` - Read file contents
 - `write_file` - Write file contents

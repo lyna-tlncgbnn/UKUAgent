@@ -1,0 +1,1 @@
+"""MaxCompute community tools."""
