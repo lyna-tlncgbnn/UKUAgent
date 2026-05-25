@@ -1,6 +1,13 @@
 "use client";
 
-import { BotIcon, CalendarClockIcon, FilesIcon, MessageCircle, MessagesSquare } from "lucide-react";
+import {
+  BotIcon,
+  CalendarClockIcon,
+  FilesIcon,
+  MessageCircle,
+  MessagesSquare,
+  SparklesIcon,
+} from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { toast } from "sonner";
@@ -51,6 +58,17 @@ export function WorkspaceNavChatList() {
             <Link className="text-muted-foreground" href="/workspace/agents">
               <BotIcon />
               <span>{t.sidebar.agents}</span>
+            </Link>
+          </SidebarMenuButton>
+        </SidebarMenuItem>
+        <SidebarMenuItem>
+          <SidebarMenuButton
+            isActive={pathname.startsWith("/workspace/skills")}
+            asChild
+          >
+            <Link className="text-muted-foreground" href="/workspace/skills">
+              <SparklesIcon />
+              <span>{t.sidebar.skills}</span>
             </Link>
           </SidebarMenuButton>
         </SidebarMenuItem>

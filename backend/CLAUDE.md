@@ -204,7 +204,7 @@ FastAPI application on port 8001 with health check at `GET /health`.
 |--------|-----------|
 | **Models** (`/api/models`) | `GET /` - list models; `GET /{name}` - model details |
 | **MCP** (`/api/mcp`) | `GET /config` - get config; `PUT /config` - update config (saves to extensions_config.json) |
-| **Skills** (`/api/skills`) | `GET /` - list skills; `GET /{name}` - details; `PUT /{name}` - update enabled; `POST /install` - install from .skill archive (accepts standard optional frontmatter like `version`, `author`, `compatibility`) |
+| **Skills** (`/api/skills`) | `GET /` - list skills; `GET /{name}` and `GET /{name}/detail` - metadata/detail; `PUT /{name}` - update enabled; `POST /install` and `POST /upload` - install .skill archives; `GET/PUT/POST/PATCH/DELETE /{name}/files...` - custom skill file management; `DELETE /{name}` - delete custom skill |
 | **Memory** (`/api/memory`) | `GET /` - memory data; `POST /reload` - force reload; `GET /config` - config; `GET /status` - config + data |
 | **Uploads** (`/api/threads/{id}/uploads`) | `POST /` - upload files (auto-converts PDF/PPT/Excel/Word); `GET /list` - list; `DELETE /{filename}` - delete |
 | **Threads** (`/api/threads/{id}`) | `DELETE /` - remove DeerFlow-managed local thread data after LangGraph thread deletion; unexpected failures are logged server-side and return a generic 500 detail |
@@ -283,7 +283,8 @@ Proxied through nginx: `/api/langgraph/*` → LangGraph, all other `/api/*` → 
 - **Format**: Directory with `SKILL.md` (YAML frontmatter: name, description, license, allowed-tools)
 - **Loading**: `load_skills()` recursively scans `skills/{public,custom}` for `SKILL.md`, parses metadata, and reads enabled state from extensions_config.json
 - **Injection**: Enabled skills listed in agent system prompt with container paths
-- **Installation**: `POST /api/skills/install` extracts .skill ZIP archive to custom/ directory
+- **Installation**: `POST /api/skills/install` installs a thread artifact archive; `POST /api/skills/upload` installs a direct multipart `.skill` upload into `skills/custom/`
+- **Management UI**: `/workspace/skills` is the top-level workspace page for viewing public/custom skills, toggling enabled state, uploading archives, editing custom skill files, and deleting custom skills
 
 ### Model Factory (`packages/harness/deerflow/models/factory.py`)
 

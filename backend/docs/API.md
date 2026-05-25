@@ -282,7 +282,7 @@ Content-Type: application/json
 
 #### List Skills
 
-Get all available skills.
+Get all available public and custom skills.
 
 ```http
 GET /api/skills
@@ -294,19 +294,10 @@ GET /api/skills
   "skills": [
     {
       "name": "pdf-processing",
-      "display_name": "PDF Processing",
       "description": "Handle PDF documents efficiently",
-      "enabled": true,
       "license": "MIT",
-      "path": "public/pdf-processing"
-    },
-    {
-      "name": "frontend-design",
-      "display_name": "Frontend Design",
-      "description": "Design and build frontend interfaces",
-      "enabled": false,
-      "license": "MIT",
-      "path": "public/frontend-design"
+      "category": "public",
+      "enabled": true
     }
   ]
 }
@@ -322,66 +313,213 @@ GET /api/skills/{skill_name}
 ```json
 {
   "name": "pdf-processing",
-  "display_name": "PDF Processing",
   "description": "Handle PDF documents efficiently",
-  "enabled": true,
   "license": "MIT",
-  "path": "public/pdf-processing",
-  "allowed_tools": ["read_file", "write_file", "bash"],
-  "content": "# PDF Processing\n\nInstructions for the agent..."
+  "category": "public",
+  "enabled": true
 }
 ```
 
-#### Enable Skill
+#### Get Skill Detail
 
 ```http
-POST /api/skills/{skill_name}/enable
+GET /api/skills/{skill_name}/detail
 ```
 
 **Response:**
 ```json
 {
-  "success": true,
-  "message": "Skill 'pdf-processing' enabled"
+  "name": "pdf-processing",
+  "description": "Handle PDF documents efficiently",
+  "license": "MIT",
+  "category": "custom",
+  "enabled": true,
+  "relative_path": "pdf-processing",
+  "skill_file": "SKILL.md",
+  "content": "---\nname: pdf-processing\ndescription: Handle PDF documents efficiently\n---\n\n# PDF Processing\n",
+  "files": ["SKILL.md", "references/guide.md"]
 }
 ```
 
-#### Disable Skill
+#### Update Skill Enabled State
 
 ```http
-POST /api/skills/{skill_name}/disable
+PUT /api/skills/{skill_name}
+Content-Type: application/json
+```
+
+**Request Body:**
+```json
+{
+  "enabled": false
+}
 ```
 
 **Response:**
 ```json
 {
-  "success": true,
-  "message": "Skill 'pdf-processing' disabled"
+  "name": "pdf-processing",
+  "description": "Handle PDF documents efficiently",
+  "license": "MIT",
+  "category": "custom",
+  "enabled": false
 }
 ```
 
-#### Install Skill
+#### Install Skill From Thread Artifact
 
-Install a skill from a `.skill` file.
+Install a skill from a `.skill` archive already present in a thread's user-data
+directory.
 
 ```http
 POST /api/skills/install
+Content-Type: application/json
+```
+
+**Request Body:**
+```json
+{
+  "thread_id": "thread-id",
+  "path": "mnt/user-data/outputs/my-skill.skill"
+}
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "skill_name": "my-skill",
+  "message": "Skill 'my-skill' installed successfully"
+}
+```
+
+#### Upload And Install Skill
+
+Upload a `.skill` ZIP archive directly and install it into `skills/custom/`.
+
+```http
+POST /api/skills/upload
 Content-Type: multipart/form-data
 ```
 
 **Request Body:**
-- `file`: The `.skill` file to install
+- `file`: `.skill` archive
 
 **Response:**
 ```json
 {
   "success": true,
-  "message": "Skill 'my-skill' installed successfully",
-  "skill": {
-    "name": "my-skill",
-    "display_name": "My Skill",
-    "path": "custom/my-skill"
-  }
+  "skill_name": "my-skill",
+  "message": "Skill 'my-skill' installed successfully"
+}
+```
+
+#### Read Skill File
+
+Read a UTF-8 text file from a public or custom skill.
+
+```http
+GET /api/skills/{skill_name}/files/{file_path}
+```
+
+**Response:**
+```json
+{
+  "path": "references/guide.md",
+  "content": "# Guide\n",
+  "files": ["SKILL.md", "references/guide.md"]
+}
+```
+
+#### Save Skill File
+
+Save a UTF-8 text file in a custom skill. Public skills are read-only.
+
+```http
+PUT /api/skills/{skill_name}/files/{file_path}
+Content-Type: application/json
+```
+
+**Request Body:**
+```json
+{
+  "content": "# Updated Guide\n"
+}
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "path": "references/guide.md",
+  "files": ["SKILL.md", "references/guide.md"],
+  "message": "File 'references/guide.md' saved successfully"
+}
+```
+
+`SKILL.md` can be saved, but its frontmatter must remain valid and its `name`
+cannot be changed.
+
+#### Create Skill File
+
+Create a new UTF-8 text file in a custom skill. Parent directories are created
+as needed.
+
+```http
+POST /api/skills/{skill_name}/files
+Content-Type: application/json
+```
+
+**Request Body:**
+```json
+{
+  "path": "references/new-guide.md",
+  "content": ""
+}
+```
+
+#### Rename Skill File
+
+Rename or move a file inside a custom skill.
+
+```http
+PATCH /api/skills/{skill_name}/files/{file_path}
+Content-Type: application/json
+```
+
+**Request Body:**
+```json
+{
+  "new_path": "references/renamed-guide.md"
+}
+```
+
+`SKILL.md` cannot be renamed.
+
+#### Delete Skill File
+
+Delete a file from a custom skill.
+
+```http
+DELETE /api/skills/{skill_name}/files/{file_path}
+```
+
+`SKILL.md` cannot be deleted.
+
+#### Delete Custom Skill
+
+Delete a custom skill directory. Public skills cannot be deleted.
+
+```http
+DELETE /api/skills/{skill_name}
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "skill_name": "my-skill",
+  "message": "Skill 'my-skill' deleted successfully"
 }
 ```
 
