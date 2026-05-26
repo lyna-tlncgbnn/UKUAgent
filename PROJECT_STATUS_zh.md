@@ -1,14 +1,14 @@
-# 项目进度 - UkuBot 企业内部协作平台
+# 项目进度 - UKUBot 企业内部协作平台
 
 更新时间：2026-05-08
 
 ## 当前主线
 
-这个分支正在从原 DeerFlow agent harness 演进为 UkuBot，一个面向企业内部协作场景的智能 Agent 平台。
+这个分支正在从原 agent harness 演进为 UKUBot，一个面向企业内部协作场景的智能 Agent 平台。
 
 当前主线包括：
 
-- 保留 DeerFlow 现有的 agent / thread / tool / sandbox 核心运行时架构
+- 保留现有的 agent / thread / tool / sandbox 核心运行时架构
 - 补齐多用户登录、数据归属和服务器部署边界
 - 通过 Web 工作台和企业微信提供内部协作入口
 - 把上传和生成文件升级为用户归属的资产目录
@@ -127,5 +127,5 @@
 
 - 旧的匿名对话和内存态数据没有做迁移。
 - 当前分支仍处在阶段性迁移中，所以有些能力已经是多用户模式，有些还在后续步骤里。
-- UkuBot 基于 DeerFlow 二次开发，内部仍保留部分 `deerflow.*` 包名、配置路径和运行时标识。
+- UKUBot 内部仍保留部分 `deerflow.*` 包名、配置路径和运行时标识，这是为了保持现有运行时兼容。
 - 第一版 Wiki 集成即使账号有 update / delete 权限，也不会把更新和删除工具暴露给 agent。
