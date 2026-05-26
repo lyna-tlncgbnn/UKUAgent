@@ -1,16 +1,15 @@
-# Project Status - UkuBot Internal Collaboration Platform
+# Project Status - UKUBot Internal Collaboration Platform
 
 Last updated: 2026-05-08
 
 ## Current Focus
 
-This fork is evolving from the original DeerFlow agent harness into UkuBot, an
-internal collaboration agent platform for company use.
+This fork is evolving from the original agent harness into UKUBot, an internal
+collaboration agent platform for company use.
 
 The current direction is:
 
-- keep the existing DeerFlow agent/thread/tool/sandbox architecture as the core
-  runtime
+- keep the existing agent/thread/tool/sandbox architecture as the core runtime
 - add authenticated users and ownership boundaries for server deployment
 - provide internal collaboration entry points through Web workspace and WeCom
 - turn uploaded/generated files into a user-owned asset catalog
@@ -135,7 +134,7 @@ The next planned work items are:
 - Old anonymous/in-memory thread data was not migrated.
 - This branch is intentionally in a staged migration, so some subsystems are
   already multi-user aware while later workstreams are still pending.
-- UkuBot is based on DeerFlow and still uses several `deerflow.*` package names,
-  config paths, and runtime identifiers internally.
+- UKUBot still uses several `deerflow.*` package names, config paths, and
+  runtime identifiers internally for compatibility.
 - The first Wiki integration intentionally excludes update/delete tools even
   when the authenticated Confluence account has those permissions.
