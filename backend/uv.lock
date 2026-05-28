@@ -722,6 +722,7 @@ source = { editable = "packages/harness" }
 dependencies = [
     { name = "agent-client-protocol" },
     { name = "agent-sandbox" },
+    { name = "beautifulsoup4" },
     { name = "ddgs" },
     { name = "dotenv" },
     { name = "duckdb" },
@@ -754,6 +755,7 @@ dependencies = [
 requires-dist = [
     { name = "agent-client-protocol", specifier = ">=0.4.0" },
     { name = "agent-sandbox", specifier = ">=0.0.19" },
+    { name = "beautifulsoup4", specifier = ">=4.14.3" },
     { name = "ddgs", specifier = ">=9.10.0" },
     { name = "dotenv", specifier = ">=0.9.9" },
     { name = "duckdb", specifier = ">=1.4.4" },

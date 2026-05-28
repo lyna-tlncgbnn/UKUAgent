@@ -196,7 +196,7 @@ tools:
 **Built-in Tools**:
 - `web_search` - Search the web (Tavily)
 - `web_fetch` - Fetch web pages (Jina AI)
-- `wiki_search_pages`, `wiki_get_page`, `wiki_get_page_permissions`, `wiki_list_children`, `wiki_create_page` - Confluence Wiki integration. See [CONFLUENCE_WIKI_TOOLS.md](CONFLUENCE_WIKI_TOOLS.md).
+- `wiki_search_pages`, `wiki_get_page`, `wiki_get_page_body_chunk`, `wiki_get_page_permissions`, `wiki_list_children`, `wiki_create_page` - Confluence Wiki integration. Use `wiki_get_page(..., body_format="agent_json")` for data analysis tasks that need accurate table reading, and `wiki_get_page_body_chunk` when a page body is truncated. See [CONFLUENCE_WIKI_TOOLS.md](CONFLUENCE_WIKI_TOOLS.md).
 - `maxcompute_list_tables`, `maxcompute_describe_table`, `maxcompute_sample_table`, `maxcompute_query` - Alibaba Cloud MaxCompute read-only query integration. See [MAXCOMPUTE_TOOLS.md](MAXCOMPUTE_TOOLS.md).
 - `ls` - List directory contents
 - `read_file` - Read file contents
